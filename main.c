@@ -10,14 +10,15 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#include "strings.h"
+#include "parser.h"
 
 
 void handle_client(int);
 void handle_send_usage(int);
 void handle_ping(int);
 void handle_echo(int, char*, ssize_t);
-void handle_err_command(int, char*);
+void handle_err_response(int, char*);
+void process_request(struct ll_node*);
 
 int main() {
 	setbuf(stdout, NULL);
@@ -95,27 +96,40 @@ void handle_client(int client_fd) {
 	// read from client
 	ssize_t bytes_read;
 	char client_request[1024];
-	char command[32];
+	struct ll_node* decoded_request;
+	while (1) {
+		bytes_read = read(client_fd, client_request, sizeof(client_request) / sizeof(client_request[0]));
+		if (bytes_read == -1) {
+			printf("Read failed: %s \n", strerror(errno));
+			return;
+		}
+		if (bytes_read == 0) {
+			printf("Client closed connection \n");
+			return;
+		}
+		if (bytes_read < 2) {
+			handle_send_usage(client_fd);
+			return;
+		}
+		client_request[bytes_read] = '\0';
 
-	bytes_read = read(client_fd, client_request, sizeof(client_request) / sizeof(client_request[0]));
-	if (bytes_read == -1) {
-		printf("Read failed: %s \n", strerror(errno));
-		return;
+		// parser
+		decoded_request = decode_resp_bulk(client_request);
+		if (!decoded_request) {
+			handle_err_response(client_fd, client_request);
+		}
+
+		printf("response has been decoded\n");
+
+		process_request(decoded_request);
+
+		deallocate_ll(decoded_request);
 	}
-	if (bytes_read < 2) {
-		handle_send_usage(client_fd);
-		return;
-	}
-	command[bytes_read] = '\0';
-	extract_command(client_request, bytes_read, command);
-	if (strcmp(command, "PING") == 0) {
-		handle_ping(client_fd);
-	}
-	else if (strcmp(command, "ECHO") == 0) {
-		handle_echo(client_fd, client_request, bytes_read);
-	} else {
-		handle_err_command(client_fd, client_request);
-	}
+}
+
+void process_request(struct ll_node* decoded_request) {
+	// __print_ll(decoded_request);
+	return;
 }
 
 void respond_to_client(int client_fd, char* buffer) {
@@ -136,7 +150,7 @@ void handle_send_usage(int client_fd) {
 
 void handle_ping(int client_fd) {
 	printf("Handling ping---------\n");
-	char *pong = "PONG\r\n";
+	char *pong = "+PONG\r\n";
 	respond_to_client(client_fd, pong);
 	printf("Successfully ponged!\n");
 }
@@ -154,9 +168,9 @@ void handle_echo(int client_fd, char* client_request, ssize_t request_length) {
 	printf("Successfully echoed\n");
 }
 
-void handle_err_command(int client_fd, char* client_request) {
+void handle_err_response(int client_fd, char* client_request) {
 	printf("Handling err---------\n");
-	char *error_command = "Invalid command\r\n";
+	char *error_command = "Invalid request\r\n";
 	respond_to_client(client_fd, error_command);
-	printf("Invalid command from client: %s", client_request);
+	printf("Invalid request from client: %s", client_request);
 }
