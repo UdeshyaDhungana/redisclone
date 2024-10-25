@@ -18,7 +18,8 @@ void handle_send_usage(int);
 void handle_ping(int);
 void handle_echo(int, char*, ssize_t);
 void handle_err_response(int, char*);
-void process_request(struct ll_node*);
+void respond_to_client(int fd, char* buffer);
+void process_lines(int fd, char** lines);
 
 int main() {
 	setbuf(stdout, NULL);
@@ -96,7 +97,8 @@ void handle_client(int client_fd) {
 	// read from client
 	ssize_t bytes_read;
 	char client_request[1024];
-	struct ll_node* decoded_request;
+	char** lines;
+	ssize_t line_count;
 	while (1) {
 		bytes_read = read(client_fd, client_request, sizeof(client_request) / sizeof(client_request[0]));
 		if (bytes_read == -1) {
@@ -112,25 +114,15 @@ void handle_client(int client_fd) {
 			return;
 		}
 		client_request[bytes_read] = '\0';
+		
+		lines = split_input_lines(client_request);
 
-		// parser
-		decoded_request = decode_resp_bulk(client_request);
-		if (!decoded_request) {
-			handle_err_response(client_fd, client_request);
-		}
+		process_lines(client_fd, lines);
 
-		printf("response has been decoded\n");
-
-		process_request(decoded_request);
-
-		deallocate_ll(decoded_request);
+		// deallocate lines
 	}
 }
 
-void process_request(struct ll_node* decoded_request) {
-	// __print_ll(decoded_request);
-	return;
-}
 
 void respond_to_client(int client_fd, char* buffer) {
 	ssize_t bytes_written;
@@ -173,4 +165,10 @@ void handle_err_response(int client_fd, char* client_request) {
 	char *error_command = "Invalid request\r\n";
 	respond_to_client(client_fd, error_command);
 	printf("Invalid request from client: %s", client_request);
+}
+
+void process_lines(int fd, char** lines) {
+	for (int i = 0; lines[i] != NULL; i++) {
+		respond_to_client(fd, "+PONG\r\n");
+	}
 }

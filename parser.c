@@ -1,71 +1,54 @@
 #include "parser.h"
 
+
+void __debug_print_hex(char* str, int count) {
+	if (str == NULL) {
+		printf("<NULL>");
+	}
+	for (int i = 0; i < count; i++) {
+		printf("%02x ", (unsigned char)str[i]);
+	}
+	printf("00\n");
+}
+
 // return a linked list, each node is a line
 // caller should call free() on the returned pointer
-struct ll_node* decode_resp_bulk(char* encoded_req) {
-	if (encoded_req[0] != '*') {
-		return NULL;
-	}
-	// skip the first *
-	char *fraction = encoded_req + 1 * sizeof(char);
-	const char *delimeter = "\r\n";
-	char* token = strstr(fraction, delimeter);
+char** split_input_lines(char* user_input) {
+	char **lines = NULL;
+	int line_count = 0;
 
-	ssize_t token_len;
-	struct ll_node* last_ptr = NULL;
-	struct ll_node* first_ptr = NULL;
-	struct ll_node* node;
+	char *token = strtok(user_input, "\n");
 	while (token != NULL) {
-		node = (struct ll_node*)malloc(sizeof(struct ll_node));
-		if (node == NULL) {
-			printf("malloc failed: %s \n", strerror(errno));
-			deallocate_ll(first_ptr);
+		lines = realloc(lines, (line_count + 1) * sizeof(char *));
+		if (lines == NULL) {
+			printf("realloc failed: %s", strerror(errno));
 			return NULL;
 		}
-		token_len = (token - fraction) / sizeof(char);
-		node->data = (char*)malloc(sizeof(char) * (token_len + 1));
-		if (node->data == NULL) {
-			printf("malloc failed: %s \n", strerror(errno));
-			deallocate_ll(first_ptr);
+
+		// allocate memory for each line and copy the token to it
+		lines[line_count] = malloc(strlen(token) + 1);
+		if (lines[line_count] == NULL) {
+			printf("malloc failed: %s", strerror(errno));
 			return NULL;
 		}
-		// can't do: should only store the string
-		strncpy(node->data, fraction, token_len);
-		node->data[token_len] = '\0';
-		node->next = NULL;
-		if (first_ptr == NULL) {
-			first_ptr = node;
-		} else {
-			last_ptr->next = node;
-		}
-		last_ptr = node;
-		fraction += 3 * sizeof(char);
-		token = strstr(fraction, delimeter);
-		printf("token is: -%s-\n", last_ptr->data);
-		
+		strcpy(lines[line_count], token);
+		line_count++;
+		token = strtok(NULL, "\n");
 	}
-	return first_ptr;
-}
-
-void deallocate_ll(struct ll_node* node) {
-	struct ll_node* temp;
-	while (node != NULL) {
-		temp = node;
-		node = temp->next;
-
-		free(temp->data);
-		free(temp);
+	lines = realloc(lines, (line_count + 1) * sizeof(char *));
+	if (lines == NULL) {
+		printf("realloc failed: %s", strerror(errno));
 	}
+	lines[line_count] = NULL;
+
+	return lines;
 }
 
 
-void __print_ll(struct ll_node *head) {
-	struct ll_node* temp;
-	printf("[");
-	while (head != NULL) {
-		temp = head;
-		head = head->next;
-		printf("%s, ", temp->data);
+ssize_t sizeof_ptr_array(char** p) {
+	ssize_t count = 0;
+	while (p[count] != NULL) {
+		count++;
 	}
-	printf("]\n");
+	return count;
 }

@@ -17,7 +17,7 @@ all: $(TARGET)
 # Rule to build the executable by linking object files
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJ)
-	rm -f $(OBJ)
+	./$(TARGET)
 
 # Rule to build object files
 %.o: %.c
