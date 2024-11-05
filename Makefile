@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -Wall -g
 
 # Source files
-SRC = parser.c main.c
+SRC = *.c
 
 # Object files (replace .c with .o for each source file)
 OBJ = $(SRC:.c=.o)

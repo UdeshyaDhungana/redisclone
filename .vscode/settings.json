@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "responder.h": "c",
+        "debug.h": "c",
+        "store.h": "c",
+        "epoll.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.default.compilerPath": "/usr/bin/gcc"
+}
