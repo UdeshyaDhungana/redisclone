@@ -115,10 +115,6 @@ void delete_node(Node* n) {
 bool save_to_store(StoreType st, char* key, char* value, long int expiry_ms) {
     bool result;
     Node** store_ptr;
-    if (!store_ptr) {
-        __printf("malloc(): %s\n", strerror(errno));
-        return false;
-    }
     Node* tmp;
     switch (st) {
         case STORETYPE_DB:
