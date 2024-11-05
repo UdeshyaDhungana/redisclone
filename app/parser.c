@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "debug.h"
 #include <sys/types.h>
 #include <assert.h>
 
@@ -142,12 +143,17 @@ char* to_resp_array(char* str_array[]) {
 		sprintf(entry_len_str, "%d", response_length);
 		response_length += 1 + strlen(entry_len_str) + 2 + 2; // eg. accounts for first $, 3, \r\n twice
 	}
+
 	sprintf(arr_len_str, "%d", arr_len);
 	response_length += 1 + strlen(arr_len_str) + 2;
 	response_length += 1; // additional \0 to terminate
 
 	char *response = malloc(response_length);
-	response = 0;
+	if (response == NULL) {
+		__printf("malloc(): %s\n", strerror(errno));
+		return NULL;
+	}
+	response[0] = '\0';
 	strcat(response, "*");
 	strcat(response, arr_len_str);
 	strcat(response, "\r\n");

@@ -1,5 +1,5 @@
-#ifndef DATABASE_H
-#define DATABASE_H
+#ifndef STORE_H
+#define STORE_H
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -7,7 +7,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#define C_DIR "dir"
+#define C_DIR  "dir"
 #define C_DBFILENAME "dbfilename"
 
 // if you add a new option, free the variable in free_config() as well
@@ -17,8 +17,8 @@ typedef struct ConfigOptions {
 } ConfigOptions;
 
 typedef enum StoreType {
-    DB = 0,
-    CONFIG = 1,
+    STORETYPE_DB = 0,
+    STORETYPE_CONFIG = 1,
 } StoreType;
 
 typedef struct Node {
@@ -50,6 +50,7 @@ bool save_to_db(char*, char*, long int);
 Node* retrieve_from_db(char *key);
 
 // config
+// gambling here to some extent. config file typically supports a fixed set of options
 bool save_to_config(char* , char* , long int );
 Node* retrieve_from_config(char*);
 

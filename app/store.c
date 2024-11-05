@@ -113,41 +113,50 @@ void delete_node(Node* n) {
 }
 
 bool save_to_store(StoreType st, char* key, char* value, long int expiry_ms) {
-    Node* store;
+    bool result;
+    Node** store_ptr;
+    if (!store_ptr) {
+        __printf("malloc(): %s\n", strerror(errno));
+        return false;
+    }
+    Node* tmp;
     switch (st) {
-        case DB:
-            store = GS.DB;
+        case STORETYPE_DB:
+            store_ptr = &GS.DB;
             break;
-        case CONFIG:
-            store = GS.config;
+        case STORETYPE_CONFIG:
+            store_ptr = &GS.config;
             break;
         default:
             assert(false);
     } 
-    if (store == NULL) {
-        store = make_node(key, value, expiry_ms);
-        if (!store) {
-            printf("was here\n");
-            return false;
+    if (*store_ptr == NULL) {
+        tmp = make_node(key, value, expiry_ms);
+        if (!tmp) {
+            result = false;
+        } else {
+            *store_ptr = tmp;
+            result = true;
         }
-        return true;
+    } else {
+        Node* runner = *store_ptr;
+        while (runner->next != NULL) {
+            runner = runner -> next;
+        }
+        Node* new_node = make_node(key, value, expiry_ms);
+        runner->next = new_node;
+        result = true;
     }
-    Node* runner = store;
-    while (runner->next != NULL) {
-        runner = runner -> next;
-    }
-    Node* new_node = make_node(key, value, expiry_ms);
-    runner->next = new_node;
-    return true;
+    return result;
 }
 
 Node* retrieve_from_store(StoreType st, char* key) {
     Node* store;
     switch(st) {
-        case DB:
+        case STORETYPE_DB:
             store = GS.DB;
             break;
-        case CONFIG:
+        case STORETYPE_CONFIG:
             store = GS.config;
             break;
         default:
@@ -165,17 +174,17 @@ Node* retrieve_from_store(StoreType st, char* key) {
 }
 
 bool save_to_db(char* key, char* value, long int expiry) {
-    return save_to_store(DB, key, value, expiry);
+    return save_to_store(STORETYPE_DB, key, value, expiry);
 }
 
 Node* retrieve_from_db(char* key) {
-    return retrieve_from_store(DB, key);
+    return retrieve_from_store(STORETYPE_DB, key);
 }
 
 bool save_to_config(char* key, char* value, long int expiry) {
-    return save_to_store(CONFIG, key, value, -1);
+    return save_to_store(STORETYPE_CONFIG, key, value, -1);
 }
 
 Node* retrieve_from_config(char* key) {
-    return retrieve_from_store(CONFIG, key);
+    return retrieve_from_store(STORETYPE_CONFIG, key);
 }

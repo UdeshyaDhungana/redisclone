@@ -148,7 +148,6 @@ void handle_config_get(int client_fd, char* args[]) {
     Node* node = retrieve_from_config(key);
 
     if (node == NULL) {
-        __printf("null is the node\n");
         respond_to_client(client_fd, NULL_BULK_STR);
         return;
     }

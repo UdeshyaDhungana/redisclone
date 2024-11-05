@@ -16,8 +16,8 @@
 
 #include "parser.h"
 #include "responder.h"
-#include "debug.h"
 #include "store.h"
+#include "debug.h"
 #include "util.h"
 
 #define MAX_EVENTS 10
@@ -177,7 +177,8 @@ void handle_client_request(int client_fd, char buffer[]) {
 
 /* TODO: Implement the following
 
-1. We implement expiry with SET. On get, we test for expiry, if expired we return -1 and delete the entry;
+1. SET and GET on both the stores do not work, make them work.
+2. Make the CONFIG GET command work. Hint: to_resp_array() for any errors
 
 */
 
