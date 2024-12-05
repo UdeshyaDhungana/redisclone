@@ -30,16 +30,12 @@ void set_reuse(int);
 void print_help();
 
 int main(int argc, char** argv) {
-	int num_configs;
 	int opt;
 	int server_fd, client_fd, epoll_fd;
-	int child_pid;
-	socklen_t client_addr_len;
 	struct sockaddr_in client_addr;
 	struct epoll_event event, events[MAX_EVENTS];
 	int port = PORT;
 	ConfigOptions c = { .dir = NULL, .dbfilename = NULL };
-
 	/* Argparse */
 	static struct option long_options[] = {
         {"dir", required_argument, 0, 'd'},
@@ -48,7 +44,6 @@ int main(int argc, char** argv) {
 		{"help", no_argument, 0, 'h'},
 		{NULL, 0, NULL, 0}
 	};
-
 
 	while ((opt = getopt_long(argc, argv, "d:f:p:h", long_options, NULL)) != -1) {
 		switch (opt) {
@@ -64,7 +59,7 @@ int main(int argc, char** argv) {
 				port = atoi(optarg);
 				// since we will be listening on port > 1000 anyway, 0 is unused
 				if (!port) {
-					__printf("not a valid port\n");
+					__debug_printf(__LINE__, __FILE__, "not a valid port\n");
 					exit(1);
 				}
 				break;
@@ -75,7 +70,13 @@ int main(int argc, char** argv) {
 				break;
 		}
 	}
-	num_configs = init_config(&c);
+	// initialize config and db
+	// int num_configs, num_keys;
+	// num_configs = _
+	init_config(&c);
+	// num_keys =
+	init_db(&c);
+	// __debug_printf(__LINE__, __FILE__, "%d configs read\n", num_configs);
 	free_config(&c);
 
 	/* Logging */
@@ -91,12 +92,12 @@ int main(int argc, char** argv) {
 	}
 
 	// bind socket
-	int reuse = 1;
 	set_reuse(server_fd);
 	set_non_blocking(server_fd);
 	struct sockaddr_in serv_addr = { .sin_family = AF_INET ,
 		.sin_port = htons(port),
-		.sin_addr = { htonl(INADDR_ANY) },
+		.sin_addr = { (INADDR_ANY) },
+		
 	};
 
 	if (bind(server_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) != 0) {
@@ -118,7 +119,7 @@ int main(int argc, char** argv) {
 	epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event);
 
 	// Event loop
-	printf("Waiting for a client to connect on %d\n", port);
+	// printf("Waiting for a client to connect on %d\n", port);
 	while (1) {
 		int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
 		for (int i = 0; i < event_count; i++) {
@@ -161,7 +162,7 @@ int main(int argc, char** argv) {
 }
 
 void handle_client_request(int client_fd, char buffer[]) {
-	char** lines = split_input_lines(buffer);
+	str_array* lines = split_input_lines(buffer);
 	int num_elements;
 	num_elements = check_syntax(lines);
 	/* syntax error */
@@ -169,18 +170,12 @@ void handle_client_request(int client_fd, char buffer[]) {
 			handle_syntax_error(client_fd);
 			return;
 	}
-	char** command_and_args = command_extraction(&lines[1], num_elements);
-	process_command(client_fd, command_and_args);
-	free_ptr_to_char_ptr(command_and_args);
-	free_ptr_to_char_ptr(lines);
+	str_array* command_and_args = command_extraction(lines, num_elements);
+	process_command(client_fd, *command_and_args);
+	free_str_array(command_and_args);
+	free_str_array(lines);
 }
 
-/* TODO: Implement the following
-
-1. SET and GET on both the stores do not work, make them work.
-2. Make the CONFIG GET command work. Hint: to_resp_array() for any errors
-
-*/
 
 void set_non_blocking(int sockfd) {
 	int flags = fcntl(sockfd, F_GETFL, 0);

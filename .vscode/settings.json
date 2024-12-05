@@ -3,8 +3,10 @@
         "responder.h": "c",
         "debug.h": "c",
         "store.h": "c",
-        "epoll.h": "c"
+        "epoll.h": "c",
+        "util.h": "c",
+        "parser.h": "c"
     },
-    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.errorSquiggles": "disabled",
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }

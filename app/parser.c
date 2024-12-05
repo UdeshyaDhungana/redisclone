@@ -2,12 +2,13 @@
 #include "debug.h"
 #include <sys/types.h>
 #include <assert.h>
+#include "util.h"
 
 
 
 // return a linked list, each node is a line
 // caller should call free() on the returned pointer
-char** split_input_lines(char* user_input) {
+str_array* split_input_lines(char* user_input) {
     const char* delim = "\r\n";
 	char **lines = NULL;
 	int line_count = 0;
@@ -30,13 +31,10 @@ char** split_input_lines(char* user_input) {
 		line_count++;
 		token = strtok(NULL, delim);
 	}
-	lines = realloc(lines, (line_count + 1) * sizeof(char *));
-	if (lines == NULL) {
-		printf("realloc : %s", strerror(errno));
-	}
-	lines[line_count] = NULL;
-
-	return lines;
+	str_array *s = (str_array*)malloc(sizeof(str_array));
+	s->array = lines;
+	s->size = line_count;
+	return s;
 }
 
 
@@ -48,15 +46,19 @@ ssize_t sizeof_ptr_array(char** p) {
 	return count;
 }
 
-int check_syntax(char **lines) {
+int check_syntax(str_array *s) {
+	if (s == NULL || s->array == NULL) {
+		fprintf(stderr, "Syntax error: NULL lines\n");
+		return 0;
+	}
+	char** lines = s->array;
 	if (lines[0][0] != '*') {
 		return false;
 	}
 	int declared_elements = atoi(lines[0] + 1);
 	int actual_elements = 0;
 	int i = 1;
-
-    while (lines[i] != NULL && lines[i + 1] != NULL) {
+    for (;i < (s->size - 1); i += 2) {
         // Parse length from the `$<length>` line
         if (lines[i][0] != '$') {
             fprintf(stderr, "Syntax error: Expected '$' at line %d.\n", i + 1);
@@ -64,16 +66,14 @@ int check_syntax(char **lines) {
         }
 
         int declared_length = atoi(&lines[i][1]);
-        int actual_length = strlen(lines[i + 1]);
+        int actual_length = strlen(lines[i+1]);
 
         if (declared_length != actual_length) {
             fprintf(stderr, "Length mismatch at line %d: declared %d, actual %d.\n", i + 1, declared_length, actual_length);
             return 0;
         }
-
-        actual_elements++;
-        i += 2;
     }
+	actual_elements = (i - 1) / 2;
 
     if (declared_elements != actual_elements) {
         fprintf(stderr, "Element count mismatch: declared %d, found %d.\n", declared_elements, actual_elements);
@@ -84,25 +84,17 @@ int check_syntax(char **lines) {
 }
 
 
-char** command_extraction(char* lines[], int num_elements) {
-	
-	char** input = malloc((num_elements+1) * sizeof(char*));
-	if (input == NULL) {
-		printf("malloc: %s", strerror(errno));
-	}
-
-
+str_array* command_extraction(str_array *s_lines, int num_elements) {
+	str_array* array = create_str_array(NULL);
+	char** lines = s_lines->array;
+	int status;
 	for (int i = 0; i < num_elements; i += 1) {
-		input[i] = malloc(strlen(lines[i*2 + 1]));
-		if (input[i] == NULL) {
-			printf("malloc() at %d on %s:  %s", __LINE__, __FILE__, strerror(errno));
+		status = append_to_str_array(&array, lines[i*2+2]);
+		if (status == -1) {
+			__debug_printf(__LINE__, __FILE__, "failed to append to str array\n");
 		}
-
-		strcpy(input[i], lines[i*2+1]);
     }
-	input[num_elements] = NULL;
-	
-	return input;
+	return array;
 }
 
 
@@ -121,8 +113,11 @@ char* to_resp_bulk_str(char* raw_reponse) {
     return resp_string;	
 }
 
-char* to_resp_array(char* str_array[]) {
-	assert(str_array != NULL);
+char* to_resp_array(str_array* array) {
+	if (array == NULL) {
+		__debug_printf(__LINE__, __FILE__, "WARN: null pointer passed to to_resp_array\n");
+		return NULL;
+	}
 	// assumes that the array is not null
 	// 1. length of array
 	// for each item
@@ -136,8 +131,8 @@ char* to_resp_array(char* str_array[]) {
 	char* runner;
 
 	// response length calculation for malloc
-	for (int i = 0; str_array[i] != NULL; i++) {
-		runner = str_array[i];
+	for (int i = 0; i < array->size ; i++) {
+		runner = array->array[i];
 		arr_len += 1;
 		response_length += strlen(runner);					// eg. $3\r\ndir\r\n [this line accounts for dir]
 		sprintf(entry_len_str, "%d", response_length);
@@ -150,15 +145,15 @@ char* to_resp_array(char* str_array[]) {
 
 	char *response = malloc(response_length);
 	if (response == NULL) {
-		__printf("malloc(): %s\n", strerror(errno));
+		__debug_printf(__LINE__, __FILE__, "malloc(): %s\n", strerror(errno));
 		return NULL;
 	}
 	response[0] = '\0';
 	strcat(response, "*");
 	strcat(response, arr_len_str);
 	strcat(response, "\r\n");
-	for (int i = 0; str_array[i] != NULL; i++) {
-		runner = str_array[i];
+	for (int i = 0; i < array->size ; i++) {
+		runner = array->array[i];
 		strcat(response, "$");
 		entry_len = strlen(runner);
 		sprintf(entry_len_str, "%d", entry_len);

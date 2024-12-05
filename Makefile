@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -Wall -g
 
 # Source files
-SRC = app/*.c
+SRC = $(wildcard app/*.c)
 
 # Object files (replace .c with .o for each source file)
 OBJ = $(SRC:.c=.o)
@@ -13,6 +13,7 @@ TARGET = redis
 
 # Default target
 all: $(TARGET)
+	./redis --dir /home/udeshya --dbfilename dump.rdb
 
 # Rule to build the executable by linking object files
 $(TARGET): $(OBJ)
@@ -26,6 +27,7 @@ $(TARGET): $(OBJ)
 # Clean up object files and the executable
 clean:
 	rm -f $(OBJ) $(TARGET)
+
 
 # Phony targets (not real files)
 .PHONY: all clean
