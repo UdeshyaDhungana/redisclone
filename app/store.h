@@ -15,6 +15,8 @@
 #define C_DIR  "dir"
 #define C_DBFILENAME "dbfilename"
 #define INDEX "index"
+#define MASTER_HOST "master_host"
+#define MASTER_PORT "master_port"
 
 #define METADATA_START ((char)0xFA)
 #define DATABASE_START ((char)0xFE)
@@ -25,9 +27,15 @@
 #define CHECKSUM_START ((char)0xFF)
 
 // if you add a new option, free the variable in free_config() as well
+typedef struct HostAndPort {
+    char* host;
+    unsigned int port;
+} HostAndPort;
+
 typedef struct ConfigOptions {
     char* dir;
     char* dbfilename;
+    HostAndPort* replica_of;
 } ConfigOptions;
 
 typedef enum StoreType {

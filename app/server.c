@@ -35,17 +35,20 @@ int main(int argc, char** argv) {
 	struct sockaddr_in client_addr;
 	struct epoll_event event, events[MAX_EVENTS];
 	int port = PORT;
-	ConfigOptions c = { .dir = NULL, .dbfilename = NULL };
+	ConfigOptions c = { .dir = NULL, .dbfilename = NULL, .replica_of = NULL  };
 	/* Argparse */
 	static struct option long_options[] = {
         {"dir", required_argument, 0, 'd'},
 		{"dbfilename", required_argument, 0, 'f'},
 		{"port", required_argument, 0, 'p'},
 		{"help", no_argument, 0, 'h'},
+		{"replicaof", required_argument, 0, 'r'},
 		{NULL, 0, NULL, 0}
 	};
+	char* master_host;
+	unsigned int master_port;
 
-	while ((opt = getopt_long(argc, argv, "d:f:p:h", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "d:f:p:h:r", long_options, NULL)) != -1) {
 		switch (opt) {
 			case 'd':
 				c.dir = malloc((strlen(optarg) + 1) * sizeof(char));
@@ -66,6 +69,20 @@ int main(int argc, char** argv) {
 			case 'h':
 				print_help();
 				exit(0);
+			case 'r':
+				// replica of
+				if (parse_master_host_and_port(optarg, &master_host, &master_port) == -1) {
+					__debug_printf(__LINE__, __FILE__, "Could not initialize redis as a replica\n");
+					exit(1);
+				}
+				c.replica_of = malloc(sizeof(HostAndPort));
+				if (!c.replica_of) {
+					__debug_printf(__LINE__, __FILE__, "malloc failed\n");
+				} else {
+					c.replica_of->host = master_host;
+					c.replica_of->port = master_port;
+				}
+				break;
 			default:
 				break;
 		}

@@ -22,6 +22,7 @@ void handle_echo(int, str_array*);
 void handle_set(int client_fd, str_array*);
 void handle_get(int client_fd, str_array*);
 void handle_keys(int client_fd, str_array*);
+void handle_info(int client_fd, str_array*);
 
 /* Config */
 void handle_config(int, str_array*);

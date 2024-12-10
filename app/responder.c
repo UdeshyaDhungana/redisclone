@@ -6,7 +6,6 @@
 char* syntax_error = "-ERR syntax error";
 char* OK_RESPONSE = "+OK\r\n";
 char* NULL_BULK_STR = "$-1\r\n";
-
 char* NOT_SUPPORTED = "Command %s not supported";
 
 void process_command(int client_fd, str_array command_and_args) {
@@ -56,7 +55,16 @@ void process_command(int client_fd, str_array command_and_args) {
         } else {
             error_flag = true;
         }
-    } else {
+    } else if (!strcmp(command, "INFO")) {
+        if (command_and_args.size >= 2) {
+            rest->array = ((command_and_args.array) + 1);
+            rest->size = command_and_args.size - 1;
+            handle_info(client_fd, rest);
+        } else {
+            error_flag = true;
+        }
+    }
+    else {
         handle_syntax_error(client_fd);
     }
     if (error_flag) {
@@ -156,6 +164,27 @@ void handle_keys(int client_fd, str_array* arguments) {
     respond_to_client(client_fd, response);
     free_str_array(keys);
     free(response);
+}
+
+void handle_info(int client_fd, str_array* arguments) {
+    printf("Handling info...\n");
+    Node* node;
+    if (arguments == NULL) {
+        __debug_printf(__LINE__, __FILE__, "arguments to info command is null. Returning all info\n");
+        respond_to_client(client_fd, to_resp_bulk_str("implement_all_keys"));
+    } else {
+        if (!strcmp(arguments->array[0], "replication")) {
+            node = retrieve_from_config(MASTER_HOST);
+            if (node == NULL) {
+                respond_to_client(client_fd, to_resp_bulk_str("role:master"));
+            } else {
+                respond_to_client(client_fd, to_resp_bulk_str("role:slave"));
+            }
+        } else {
+            __debug_printf(__LINE__, __FILE__, "info called with unimplemented argument\n");
+            respond_to_client(client_fd, to_resp_bulk_str("IMplement all keys\n"));
+        }
+    }
 }
 
 

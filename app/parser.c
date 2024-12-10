@@ -109,7 +109,6 @@ char* to_resp_bulk_str(char* raw_reponse) {
     }
 
     sprintf(resp_string, "$%zu\r\n%s\r\n", length, raw_reponse);
-
     return resp_string;	
 }
 

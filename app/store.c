@@ -49,21 +49,25 @@ void __debug_print_metadata() {
 
 // you have to de-allocate the char ptr returned by this function
 char* read_entire_file(const char *filename) {
+    if (access(filename, F_OK & R_OK & W_OK) == -1) {
+        __debug_printf(__LINE__, __FILE__, "RDB file does not exist at %s\n", filename);
+        return NULL;
+    }
     int fd = open(filename, O_RDONLY);
     if (fd < 0) {
-        __debug_printf(__LINE__, __FILE__, "%s", strerror(errno));
+        __debug_printf(__LINE__, __FILE__, "%s\n", strerror(errno));
         return NULL;
     }
     struct stat file_stat;
     if (fstat(fd, &file_stat) < 0) {
-        __debug_print_config(__LINE__, __FILE__, "%s", strerror(errno));
+        __debug_print_config(__LINE__, __FILE__, "%s\n", strerror(errno));
         close(fd);
         return NULL;
     }
     size_t file_size = file_stat.st_size;
     char *content = malloc(file_size + 1);
     if (!content) {
-        __debug_printf(__LINE__, __FILE__, "%s", strerror(errno));
+        __debug_printf(__LINE__, __FILE__, "%s\n", strerror(errno));
         close(fd);
         return NULL;
     }
@@ -91,6 +95,11 @@ int init_db(ConfigOptions* c) {
     strcat(full_rdb_path, c->dbfilename);
     // we now read from the rdb file
     char* file_contents = read_entire_file(full_rdb_path);
+    if (file_contents == NULL) {
+        free(full_rdb_path);
+        return -1;
+    }
+    free(full_rdb_path);
     unsigned int file_offset = 0;
     unsigned int read_count = 0;
     // for every copy_substring operation, operate in this fashion:
@@ -184,19 +193,19 @@ int init_db(ConfigOptions* c) {
     unsigned int expiry_s = 0;
     unsigned int num_keys = 0;
     bool save_success;
+    printf("type id: %x\n", type_identifier);
     while (type_identifier != CHECKSUM_START) {
         if (type_identifier == EXPIRY_PAIR_MS) {
             // the 8 byte that follows is timestamp in ms
-            file_offset = copy_from_file_contents((char*)&expiry_ms, file_contents, file_offset, 8, false);
+            file_offset = copy_ms_from_file_contents(&expiry_ms, file_contents, file_offset);
         } else if (type_identifier == EXPIRY_PAIR_SECONDS) {
-            file_offset = copy_from_file_contents((char*)&expiry_s, file_contents, file_offset, 4, false);
+            // the 4 bytes that follows is timestamp in s
+            // can we make better abstractions? yes. am i willing to do it rn? no!
+            file_offset = copy_seconds_from_file_contents(&expiry_s, file_contents, file_offset);
         }
         if (type_identifier == EXPIRY_PAIR_MS || type_identifier == EXPIRY_PAIR_SECONDS) {
-            // printf("Expiry data found...\n");
-            // since it was an expiring data, determine its type
+            // since it was an expiring data, determine its type, otherwise type_identifier already contains it
             file_offset = copy_from_file_contents(&type_identifier, file_contents, file_offset, 1, false);
-        } else {
-            // printf("Non-expiry data found...\n");
         }
         file_offset = copy_from_file_contents(&size_identifier, file_contents, file_offset, 1, false);
         // __debug_printf(__LINE__, __FILE__, "size of key is %x\n", size_identifier);
@@ -218,7 +227,7 @@ int init_db(ConfigOptions* c) {
             return -1;
         }
         file_offset = copy_from_file_contents(value, file_contents, file_offset, (unsigned int)size_identifier, true);
-        __debug_printf(__LINE__, __FILE__, "%s = %s\n", key, value);
+        __debug_printf(__LINE__, __FILE__, "%s = %s @ %ul\n", key, value, choose_between_expiries(expiry_ms, expiry_s));
         // convert endianness of expiry timestamp
         save_success = save_to_db(key, value, choose_between_expiries(expiry_ms, expiry_s));
         if (!save_success) {
@@ -241,6 +250,7 @@ int init_db(ConfigOptions* c) {
 /* Init */
 int init_config(ConfigOptions* c) {
     int num_config = 0;
+    char port_str[6];
 
     if (c->dir != NULL) {
         save_to_config(C_DIR, c->dir, -1);
@@ -248,6 +258,12 @@ int init_config(ConfigOptions* c) {
     }
     if (c->dbfilename != NULL) {
         save_to_config(C_DBFILENAME, c->dbfilename, -1);
+        num_config++;
+    }
+    if (c->replica_of != NULL) {
+        save_to_config(MASTER_HOST, c->replica_of->host, -1);
+        sprintf(port_str, "%u", c->replica_of->port);
+        save_to_config(MASTER_PORT, port_str, -1);
         num_config++;
     }
     return num_config;
