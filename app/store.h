@@ -15,6 +15,22 @@
 #define C_DIR  "dir"
 #define C_DBFILENAME "dbfilename"
 #define INDEX "index"
+#define REPLICATION "replication"
+/* keys */
+#define ROLE "role"
+#define REPLICAOF "replicaof"
+#define CONNECTED_SLAVES "connected_slaves"
+#define MASTER_REPLID "master_replid"
+#define MASTER_REPL_OFFSET "master_repl_offset"
+#define SECOND_REPL_OFFSET "second_repl_offset"
+#define REPL_BACKLOG_ACTIVE "repl_backlog_active"
+#define REPL_BACKLOG_SIZE "repl_backlog_size"
+#define REPL_BACKLOG_FIRST_BYTE_OFFSET "repl_backlog_first_byte_offset"
+#define REPL_BACKLOG_HISTLEN "repl_backlog_histlen"
+#define MASTER "master"
+#define SLAVE "slave"
+#define PORT_LITERAL "port"
+/* predefined values */
 #define MASTER_HOST "master_host"
 #define MASTER_PORT "master_port"
 
@@ -35,6 +51,7 @@ typedef struct HostAndPort {
 typedef struct ConfigOptions {
     char* dir;
     char* dbfilename;
+    char* port;
     HostAndPort* replica_of;
 } ConfigOptions;
 
@@ -42,7 +59,8 @@ typedef enum StoreType {
     STORETYPE_DB = 0,
     STORETYPE_CONFIG = 1,
     STORETYPE_METADATA = 2,
-    STORETYPE_DB_INFO = 3
+    STORETYPE_DB_INFO = 3,
+    STORETYPE_REDIS_INFO = 4,
 } StoreType;
 
 
@@ -82,8 +100,8 @@ bool save_to_metadata(char*, char* );
 Node* retrieve_from_metadata(char* );
 
 // db info
-bool save_to_db_info(char*, char*);
-Node* retrieve_from_db_info(char*);
+// bool save_to_db_info(char*, char*);
+// Node* retrieve_from_db_info(char*);
 
 // init
 int init_config(ConfigOptions*);

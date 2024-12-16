@@ -6,6 +6,10 @@
 #include <sys/time.h>
 #include <stdbool.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 int split_string(char* source, char delim, char** left, char** right);
 void free_ptr_to_char_ptr(char**);
@@ -31,5 +35,8 @@ void print_str_array(str_array *s, char delim);
 int parse_master_host_and_port(char* host_and_port_string, char** host, unsigned int *port);
 
 bool match_str(char* pattern, char* string);
+
+bool is_valid_ipv4(char* ip_address);
+bool hostname_to_ip(char* hostname, char ip[16]);
 
 #endif

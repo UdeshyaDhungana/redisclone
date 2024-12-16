@@ -206,3 +206,35 @@ int parse_master_host_and_port(char* host_and_port_string, char** host, unsigned
 	free(port_str);
 	return 0;
 }
+
+bool is_valid_ipv4(char* ip_address) {
+	struct sockaddr_in sa;
+	int result = inet_pton(AF_INET, ip_address, &(sa.sin_addr));
+	return result != 0;
+}
+
+// only supports ipv4 at the moment
+bool hostname_to_ip(char* hostname, char ip[16]) {
+	// strcpy(ip, "127.0.0.1");
+	struct addrinfo hints, *res, *p;
+	int status;
+	void *addr;
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+	if ((status = getaddrinfo(hostname, NULL, &hints, &res)) != 0) {
+		return false;
+	}
+	for (p = res; p != NULL; p = p->ai_next) {
+		if (p->ai_family == AF_INET) {
+			struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+			addr = &(ipv4->sin_addr);
+			inet_ntop(p->ai_family, addr, ip, 16);
+			break;
+		}
+	}
+	freeaddrinfo(res);
+	return true;
+}

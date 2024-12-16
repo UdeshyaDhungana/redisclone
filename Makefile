@@ -12,8 +12,11 @@ OBJ = $(SRC:.c=.o)
 TARGET = redis
 
 # Default target
-all: $(TARGET)
+master: $(TARGET)
 	./redis --dir /home/udeshya --dbfilename dump.rdb
+
+slave: $(TARGET)
+	./redis --dir /home/udeshya --replicaof "localhost 6379" --port 10000
 
 # Rule to build the executable by linking object files
 $(TARGET): $(OBJ)
@@ -30,5 +33,5 @@ clean:
 
 
 # Phony targets (not real files)
-.PHONY: all clean
+.PHONY: server clean
 

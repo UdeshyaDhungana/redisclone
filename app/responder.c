@@ -168,23 +168,54 @@ void handle_keys(int client_fd, str_array* arguments) {
 
 void handle_info(int client_fd, str_array* arguments) {
     printf("Handling info...\n");
-    Node* node;
+    __debug_print_config();
+    // char* response = "role:%s\nconnected_slaves:%s\nmaster_replid:%s\nmaster_repl_offset:%s\nsecond_repl_offset:%s\nrepl_backlog_active:%s\nrepl_backlog_size:%s\nrepl_backlog_first_byte_offset:%s\nrepl_backlog_histlen:%s"
+    char* raw_response;
+    char *response;
     if (arguments == NULL) {
         __debug_printf(__LINE__, __FILE__, "arguments to info command is null. Returning all info\n");
         respond_to_client(client_fd, to_resp_bulk_str("implement_all_keys"));
     } else {
-        if (!strcmp(arguments->array[0], "replication")) {
-            node = retrieve_from_config(MASTER_HOST);
-            if (node == NULL) {
-                respond_to_client(client_fd, to_resp_bulk_str("role:master"));
-            } else {
-                respond_to_client(client_fd, to_resp_bulk_str("role:slave"));
-            }
+        if (!strcmp(arguments->array[0], REPLICATION)) {
+            // this part is shit, but i ain't working on this anytime soon
+            ssize_t response_size = 6;
+            raw_response = malloc(response_size);
+            strcpy(raw_response, "role:");
+            Node* master_host = retrieve_from_config(MASTER_HOST);
+            Node* master_port = retrieve_from_config(MASTER_PORT);
+            response_size += (master_host == NULL && master_port == NULL)?strlen(MASTER):strlen(SLAVE);
+            raw_response = realloc(raw_response, response_size);
+            strcat(raw_response, (master_host == NULL && master_port == NULL)? MASTER: SLAVE);
+
+            // you need to duplicate this block for every property
+            response_size += 1 + strlen(MASTER_REPLID) + 1;
+            raw_response = realloc(raw_response, response_size);
+            strcat(raw_response, "\nmaster_replid:");
+            Node* master_replid = retrieve_from_config(MASTER_REPLID);
+            response_size += master_replid == NULL?strlen(MASTER_HOST):strlen(master_replid->value); // strlen(role)
+            raw_response = realloc(raw_response, response_size);
+            strcat(raw_response, (master_replid == NULL)? "":master_replid->value);
+
+            response_size += 1 + strlen(MASTER_REPL_OFFSET) + 1;
+            raw_response = realloc(raw_response, response_size);
+            strcat(raw_response, "\nmaster_repl_offset:");
+            Node* master_repl_offset = retrieve_from_config(MASTER_REPL_OFFSET);
+            response_size += master_repl_offset == NULL?0:strlen(master_repl_offset->value);
+            raw_response = realloc(raw_response, response_size);
+            strcat(raw_response, (master_repl_offset == NULL)? "": master_repl_offset->value);
+
+            response_size += 1;
+            raw_response = realloc(raw_response, response_size);
+            strcat(raw_response, "\n");
         } else {
             __debug_printf(__LINE__, __FILE__, "info called with unimplemented argument\n");
-            respond_to_client(client_fd, to_resp_bulk_str("IMplement all keys\n"));
+            raw_response = to_resp_bulk_str("IMplement all keys\n");
         }
     }
+    response = to_resp_bulk_str(raw_response);
+    respond_to_client(client_fd, response);
+    free(response);
+    free(raw_response);
 }
 
 

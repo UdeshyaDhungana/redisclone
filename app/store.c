@@ -193,7 +193,6 @@ int init_db(ConfigOptions* c) {
     unsigned int expiry_s = 0;
     unsigned int num_keys = 0;
     bool save_success;
-    printf("type id: %x\n", type_identifier);
     while (type_identifier != CHECKSUM_START) {
         if (type_identifier == EXPIRY_PAIR_MS) {
             // the 8 byte that follows is timestamp in ms
@@ -266,6 +265,13 @@ int init_config(ConfigOptions* c) {
         save_to_config(MASTER_PORT, port_str, -1);
         num_config++;
     }
+    if (c->port != NULL) {
+        save_to_config(PORT_LITERAL, c->port, -1);
+        num_config++;
+    }
+    // initialize redis info related things
+    save_to_config(MASTER_REPLID, "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb", -1);
+    save_to_config(MASTER_REPL_OFFSET, "0", -1);
     return num_config;
 }
 

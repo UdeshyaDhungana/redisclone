@@ -19,6 +19,7 @@
 #include "store.h"
 #include "debug.h"
 #include "util.h"
+#include "replica.h"
 
 #define MAX_EVENTS 10
 #define PORT 6379
@@ -35,7 +36,7 @@ int main(int argc, char** argv) {
 	struct sockaddr_in client_addr;
 	struct epoll_event event, events[MAX_EVENTS];
 	int port = PORT;
-	ConfigOptions c = { .dir = NULL, .dbfilename = NULL, .replica_of = NULL  };
+	ConfigOptions c = { .dir = NULL, .dbfilename = NULL, .replica_of = NULL, .port = NULL  };
 	/* Argparse */
 	static struct option long_options[] = {
         {"dir", required_argument, 0, 'd'},
@@ -65,6 +66,8 @@ int main(int argc, char** argv) {
 					__debug_printf(__LINE__, __FILE__, "not a valid port\n");
 					exit(1);
 				}
+				c.port = malloc((strlen(optarg) + 1) * sizeof(char));
+				strcpy(c.port, optarg);
 				break;
 			case 'h':
 				print_help();
@@ -100,6 +103,9 @@ int main(int argc, char** argv) {
 	setbuf(stdout, NULL);
 	setbuf(stderr, NULL);
 	printf("Logs from your program will appear here!\n");
+
+	// communicate with server if this is the slave
+	communicate_with_master();
 
 	// creating socket
 	server_fd = socket(AF_INET, SOCK_STREAM, 0);

@@ -20,9 +20,5 @@ str_array* command_extraction(str_array*, int num_lines);
 
 char* to_resp_bulk_str(char* str);
 
-// deprecated
 char* to_resp_array(str_array* array);
-
-// use this one to convert str array to resp array
-
 #endif
