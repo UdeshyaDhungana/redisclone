@@ -8,8 +8,6 @@
 #include <stdbool.h>
 #include "util.h"
 
-
-
 str_array* split_input_lines(char* user_input);
 
 ssize_t sizeof_ptr_array(char** p);
@@ -17,6 +15,8 @@ ssize_t sizeof_ptr_array(char** p);
 int check_syntax(str_array *);
 
 str_array* command_extraction(str_array*, int num_lines);
+
+char* to_resp_simple_str(char* raw_response);
 
 char* to_resp_bulk_str(char* str);
 

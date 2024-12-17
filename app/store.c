@@ -47,55 +47,22 @@ void __debug_print_metadata() {
 }
 /* end debug */
 
-// you have to de-allocate the char ptr returned by this function
-char* read_entire_file(const char *filename) {
-    if (access(filename, F_OK & R_OK & W_OK) == -1) {
-        __debug_printf(__LINE__, __FILE__, "RDB file does not exist at %s\n", filename);
-        return NULL;
-    }
-    int fd = open(filename, O_RDONLY);
-    if (fd < 0) {
-        __debug_printf(__LINE__, __FILE__, "%s\n", strerror(errno));
-        return NULL;
-    }
-    struct stat file_stat;
-    if (fstat(fd, &file_stat) < 0) {
-        __debug_print_config(__LINE__, __FILE__, "%s\n", strerror(errno));
-        close(fd);
-        return NULL;
-    }
-    size_t file_size = file_stat.st_size;
-    char *content = malloc(file_size + 1);
-    if (!content) {
-        __debug_printf(__LINE__, __FILE__, "%s\n", strerror(errno));
-        close(fd);
-        return NULL;
-    }
-    ssize_t bytes_read = read(fd, content, file_size);
-    if (bytes_read != file_size) {
-        __debug_printf(__LINE__, __FILE__, "%s", "Could not read the entire file\n");
-        close(fd);
-        return NULL;
-    }
-    content[bytes_read] = 0x00;
-    close(fd);
-    return content;
-}
 
 /* at any point during initializing db, if we come across any errors in the file, we start with null config */
-// TODO: change this to use read_entire_file()
+/* this function is *very very* poorly written. I need to do a project on string manipulation and shit to improve my skills */
 int init_db(ConfigOptions* c) {
+    unsigned int num_keys = 0;
     if (c == NULL || c->dir == NULL || c->dbfilename == NULL) {
         __debug_printf( __LINE__, __FILE__, "empty config\n");
         return -1;
     }
-    char* full_rdb_path = malloc(sizeof(char) * (strlen(c->dir) + strlen(c->dbfilename) + 1));
+    char* full_rdb_path = malloc(sizeof(char) * (strlen(c->dir) + strlen(c->dbfilename) + 2));
     strcpy(full_rdb_path, c->dir);
     strcat(full_rdb_path, "/");
     strcat(full_rdb_path, c->dbfilename);
     // we now read from the rdb file
-    char* file_contents = read_entire_file(full_rdb_path);
-    if (file_contents == NULL) {
+    file_content *f = read_entire_file(full_rdb_path);
+    if (f == NULL) {
         free(full_rdb_path);
         return -1;
     }
@@ -111,10 +78,10 @@ int init_db(ConfigOptions* c) {
 
     read_count = 9;
     // printf("Parsing Magic constant...");
-    file_offset = copy_from_file_contents(header, file_contents, file_offset, read_count, true);
+    file_offset = copy_from_file_contents(header, f->content, file_offset, read_count, true);
     if (strcmp(header, "REDIS0011") && strcmp(header, "REDIS0010")) {
         __debug_printf(__LINE__, __FILE__, "%s", "RDB file version unsupported :(\n");
-        free(file_contents);
+        free_file_content(f);
         return -1;
     }
 
@@ -123,34 +90,34 @@ int init_db(ConfigOptions* c) {
     char* key;
     char* value;
     // printf("Parsing Metadata...\n");
-    file_offset = copy_from_file_contents(&identifier, file_contents, file_offset, 1, false);
+    file_offset = copy_from_file_contents(&identifier, f->content, file_offset, 1, false);
     bool saved;
     int value_length;
     while (identifier == METADATA_START) {
         // read key size
-        file_offset = copy_from_file_contents(&identifier, file_contents, file_offset, 1, false);
+        file_offset = copy_from_file_contents(&identifier, f->content, file_offset, 1, false);
         key = (char*)malloc((identifier + 1) * sizeof(char));
         if (key == NULL) {
             __debug_printf( __LINE__, __FILE__,  strerror(errno));
-            free(file_contents);
+            free_file_content(f);
             return -1;
         }
-        file_offset = copy_from_file_contents(key, file_contents, file_offset, (unsigned int)identifier, true);
+        file_offset = copy_from_file_contents(key, f->content, file_offset, (unsigned int)identifier, true);
         // some keys do not have string encoded values
         if (!(strcmp(key, "redis-bits") && strcmp(key, "ctime") && strcmp(key, "used-mem") && strcmp(key, "aof-base"))) {
-            for (value_length = 0; (file_contents[file_offset + value_length] != METADATA_START && file_contents[file_offset + value_length] != DATABASE_START); value_length++); 
+            for (value_length = 0; (f->content[file_offset + value_length] != METADATA_START && f->content[file_offset + value_length] != DATABASE_START && f->content[file_offset + value_length] != CHECKSUM_START); value_length++); 
         } else {
-            file_offset = copy_from_file_contents(&identifier, file_contents, file_offset, 1, false);
+            file_offset = copy_from_file_contents(&identifier, f->content, file_offset, 1, false);
             value_length = identifier;
         }
         value = malloc((value_length + 1) * sizeof(char)) ;
         if (value == NULL) {
             __debug_printf( __LINE__, __FILE__, strerror(errno));
             free(key);
-            free(file_contents);
+            free_file_content(f);
             return -1;
         }
-        file_offset = copy_from_file_contents(value, file_contents, file_offset, value_length, true);
+        file_offset = copy_from_file_contents(value, f->content, file_offset, value_length, true);
 
         saved = save_to_metadata(key, value);
         if (!saved) {
@@ -159,73 +126,79 @@ int init_db(ConfigOptions* c) {
         printf("Saved metadata: %s = %s\n", key, value);
         free(key);
         free(value);
-        file_offset = copy_from_file_contents(&identifier, file_contents, file_offset, 1, false);
+        file_offset = copy_from_file_contents(&identifier, f->content, file_offset, 1, false);
+    }
+
+    if (identifier == CHECKSUM_START) {
+        // call checksum early
+        return num_keys;
     }
     
+
     printf("Parsing section between metadata and db\n");
     // database, we have encountered the 0xFE byte by now, we may need to change this implementation in case 'size-encoded' means something different
     if (identifier != DATABASE_START) {
         __debug_printf(__LINE__, __FILE__, "Error reading start of database subsection\n");
-        free(file_contents);
+        free_file_content(f);
         return -1;
     }
     // database index size
-    file_offset = copy_from_file_contents(&identifier, file_contents, file_offset, 1, false);
+    file_offset = copy_from_file_contents(&identifier, f->content, file_offset, 1, false);
     GS.db_info.index = identifier;
 
     // 0xFB [we skipped reading this part :)]
     file_offset += 1;
 
     // num of key value pairs without expiry
-    file_offset = copy_from_file_contents(&identifier, file_contents, file_offset, 1, false);
+    file_offset = copy_from_file_contents(&identifier, f->content, file_offset, 1, false);
     GS.db_info.num_key_val = identifier;
 
     // num of key value pairs with expiry
-    file_offset = copy_from_file_contents(&identifier, file_contents, file_offset, 1, false);
+    file_offset = copy_from_file_contents(&identifier, f->content, file_offset, 1, false);
     GS.db_info.num_expiry_keys = identifier;
 
     // start reading data
     char type_identifier;
     char size_identifier;
     printf("Parsing DB...\n");
-    file_offset = copy_from_file_contents(&type_identifier, file_contents, file_offset, 1, false);
+    file_offset = copy_from_file_contents(&type_identifier, f->content, file_offset, 1, false);
     unsigned long long expiry_ms = 00;
     unsigned int expiry_s = 0;
-    unsigned int num_keys = 0;
     bool save_success;
     while (type_identifier != CHECKSUM_START) {
+        exit(1);
         if (type_identifier == EXPIRY_PAIR_MS) {
             // the 8 byte that follows is timestamp in ms
-            file_offset = copy_ms_from_file_contents(&expiry_ms, file_contents, file_offset);
+            file_offset = copy_ms_from_file_contents(&expiry_ms, f->content, file_offset);
         } else if (type_identifier == EXPIRY_PAIR_SECONDS) {
             // the 4 bytes that follows is timestamp in s
             // can we make better abstractions? yes. am i willing to do it rn? no!
-            file_offset = copy_seconds_from_file_contents(&expiry_s, file_contents, file_offset);
+            file_offset = copy_seconds_from_file_contents(&expiry_s, f->content, file_offset);
         }
         if (type_identifier == EXPIRY_PAIR_MS || type_identifier == EXPIRY_PAIR_SECONDS) {
             // since it was an expiring data, determine its type, otherwise type_identifier already contains it
-            file_offset = copy_from_file_contents(&type_identifier, file_contents, file_offset, 1, false);
+            file_offset = copy_from_file_contents(&type_identifier, f->content, file_offset, 1, false);
         }
-        file_offset = copy_from_file_contents(&size_identifier, file_contents, file_offset, 1, false);
+        file_offset = copy_from_file_contents(&size_identifier, f->content, file_offset, 1, false);
         // __debug_printf(__LINE__, __FILE__, "size of key is %x\n", size_identifier);
         key = malloc((size_identifier + 1) * sizeof(char));
         if (key == NULL) {
             __debug_printf(__LINE__, __FILE__, strerror(errno));
-            free(file_contents);
+            free_file_content(f);
             return -1;
         }
-        file_offset = copy_from_file_contents(key, file_contents, file_offset, (unsigned int)size_identifier, true);
+        file_offset = copy_from_file_contents(key, f->content, file_offset, (unsigned int)size_identifier, true);
         // __debug_printf(__LINE__, __FILE__, "key is %s\n", key);
-        file_offset = copy_from_file_contents(&size_identifier, file_contents, file_offset, 1, false);
+        file_offset = copy_from_file_contents(&size_identifier, f->content, file_offset, 1, false);
         // __debug_printf(__LINE__, __FILE__, "size of value is %x\n", size_identifier);
         value = malloc((size_identifier + 1) * sizeof(char));
         if (key == NULL) {
             __debug_printf(__LINE__, __FILE__, strerror(errno));
             free(key);
-            free(file_contents);
+            free_file_content(f);
             return -1;
         }
-        file_offset = copy_from_file_contents(value, file_contents, file_offset, (unsigned int)size_identifier, true);
+        file_offset = copy_from_file_contents(value, f->content, file_offset, (unsigned int)size_identifier, true);
         __debug_printf(__LINE__, __FILE__, "%s = %s @ %ul\n", key, value, choose_between_expiries(expiry_ms, expiry_s));
         // convert endianness of expiry timestamp
         save_success = save_to_db(key, value, choose_between_expiries(expiry_ms, expiry_s));
@@ -236,13 +209,14 @@ int init_db(ConfigOptions* c) {
         expiry_ms = expiry_s = 0;
         free(key);
         free(value);
-        file_offset = copy_from_file_contents(&type_identifier, file_contents, file_offset, 1, false);
+        file_offset = copy_from_file_contents(&type_identifier, f->content, file_offset, 1, false);
     }
     printf("Parsing checksum...\n");
     // printf("%x\n", file_contents[file_offset]);
     // checksum part
     // now you have to refactor the code, and read the entire file into a string
     // skip the checksum part and let's test the code
+    free_file_content(f);
     return num_keys;
 }
 
@@ -264,14 +238,16 @@ int init_config(ConfigOptions* c) {
         sprintf(port_str, "%u", c->replica_of->port);
         save_to_config(MASTER_PORT, port_str, -1);
         num_config++;
+    } else {
+        save_to_config(MASTER_REPLID, "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb", -1);
+        save_to_config(MASTER_REPL_OFFSET, "0", -1);
+        num_config += 2;
     }
     if (c->port != NULL) {
         save_to_config(PORT_LITERAL, c->port, -1);
         num_config++;
     }
     // initialize redis info related things
-    save_to_config(MASTER_REPLID, "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb", -1);
-    save_to_config(MASTER_REPL_OFFSET, "0", -1);
     return num_config;
 }
 

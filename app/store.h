@@ -93,7 +93,7 @@ void __debug_print_store(Node* );
 // 
 
 // load database from file
-int init_db(ConfigOptions*);
+int init_db(ConfigOptions *);
 
 // metadata
 bool save_to_metadata(char*, char* );

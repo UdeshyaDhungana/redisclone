@@ -238,3 +238,52 @@ bool hostname_to_ip(char* hostname, char ip[16]) {
 	freeaddrinfo(res);
 	return true;
 }
+
+// you have to de-allocate the char ptr returned by this function
+file_content* read_entire_file(const char *filename) {
+    if (access(filename, F_OK & R_OK & W_OK) == -1) {
+        __debug_printf(__LINE__, __FILE__, "RDB file does not exist at %s\n", filename);
+        return NULL;
+    }
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        __debug_printf(__LINE__, __FILE__, "%s\n", strerror(errno));
+        return NULL;
+    }
+    struct stat file_stat;
+    if (fstat(fd, &file_stat) < 0) {
+        __debug_printf(__LINE__, __FILE__, "%s\n", strerror(errno));
+        close(fd);
+        return NULL;
+    }
+    size_t file_size = file_stat.st_size;
+    char *content = malloc(file_size + 1);
+    if (!content) {
+        __debug_printf(__LINE__, __FILE__, "%s\n", strerror(errno));
+        close(fd);
+        return NULL;
+    }
+    ssize_t bytes_read = read(fd, content, file_size);
+    if (bytes_read != file_size) {
+        __debug_printf(__LINE__, __FILE__, "%s", "Could not read the entire file\n");
+        close(fd);
+        return NULL;
+    }
+    content[bytes_read] = 0x00;
+    close(fd);
+	file_content* f = malloc(sizeof(file_content));
+	f->content = content;
+	f->size = bytes_read;
+    return f;
+}
+
+void free_file_content(file_content *f) {
+	if (f == NULL) {
+		return;
+	}
+	if (f->content == NULL) {
+		return;
+	}
+	free(f->content);
+	free(f);
+}

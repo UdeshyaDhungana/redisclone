@@ -10,6 +10,12 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+
 
 int split_string(char* source, char delim, char** left, char** right);
 void free_ptr_to_char_ptr(char**);
@@ -28,6 +34,11 @@ typedef struct str_array {
 	unsigned int size;
 } str_array;
 
+typedef struct file_content {
+	char* content;
+	unsigned int size;
+} file_content;
+
 str_array* create_str_array(const char* element);
 int append_to_str_array(str_array** array, const char* element);
 void free_str_array(str_array *s);
@@ -38,5 +49,8 @@ bool match_str(char* pattern, char* string);
 
 bool is_valid_ipv4(char* ip_address);
 bool hostname_to_ip(char* hostname, char ip[16]);
+
+file_content* read_entire_file(const char*);
+void free_file_content(file_content*);
 
 #endif

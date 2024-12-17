@@ -24,8 +24,14 @@ void handle_get(int client_fd, str_array*);
 void handle_keys(int client_fd, str_array*);
 void handle_info(int client_fd, str_array*);
 
+void handle_replconf(int client_fd, str_array*);
+void handle_psync(int client_fd, str_array*);
+
 /* Config */
 void handle_config(int, str_array*);
 void handle_config_get(int client_fd, str_array*);
+
+/* Transfer rdb */
+void transfer_rdb_file(int);
 
 #endif

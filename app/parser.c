@@ -97,6 +97,18 @@ str_array* command_extraction(str_array *s_lines, int num_elements) {
 	return array;
 }
 
+// we will need to add a 'type' parameter if we intend to include all resp data types
+char* to_resp_simple_str(char* raw_response) {
+	// simple string cannot contain \r\n
+	char *result;
+	if (strstr(raw_response, "\r\n")) {
+		return NULL;
+	} else {
+		result = malloc(strlen(raw_response) + 4);
+		sprintf(result, "+%s\r\n", raw_response);
+	}
+	return result;
+}
 
 char* to_resp_bulk_str(char* raw_reponse) {
     size_t length = strlen(raw_reponse);
