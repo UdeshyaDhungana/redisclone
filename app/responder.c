@@ -238,7 +238,6 @@ void handle_replconf(int client_fd, str_array* arguments) {
     respond_to_client(client_fd, OK_RESPONSE);
 }
 
-/* JUST for codecrafters stupid fucking test */
 #define HEX_STRING "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 
 void hex_to_bytes(const char *hex_str, unsigned char **out_bytes, size_t *out_len) {
