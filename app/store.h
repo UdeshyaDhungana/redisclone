@@ -82,6 +82,7 @@ typedef struct GlobalStore {
     Node* config;
     Node* metadata;
     DB_Info db_info;
+    str_array* command_history;
 } GlobalStore;
 
 // debug
@@ -126,5 +127,9 @@ Node* retrieve_from_config(char*);
 
 // keys
 str_array* get_db_keys(char* pattern);
+
+// command history
+bool add_to_command_history(char[]);
+str_array* get_command_history();
 
 #endif

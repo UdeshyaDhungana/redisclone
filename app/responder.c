@@ -8,10 +8,11 @@ char* OK_RESPONSE = "+OK\r\n";
 char* NULL_BULK_STR = "$-1\r\n";
 char* NOT_SUPPORTED = "Command %s not supported";
 
-void process_command(int client_fd, str_array command_and_args) {
+enum State_modification process_command(int client_fd, str_array command_and_args) {
     char* command = command_and_args.array[0];
     str_array *rest = malloc(sizeof(str_array));
-    bool error_flag = false;
+    bool cmd_error_flag = false;
+    bool discard_command = true;
 
     if (!strcmp(command, "PING")) {
         handle_ping(client_fd);
@@ -21,15 +22,15 @@ void process_command(int client_fd, str_array command_and_args) {
             rest->size = command_and_args.size - 1;
             handle_echo(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else if (!strcmp(command, "SET")) {
         if (command_and_args.size == 3 || command_and_args.size == 5) {
             rest->array = ((command_and_args.array) + 1);
             rest->size = command_and_args.size - 1;
-            handle_set(client_fd, rest);
+            discard_command = (bool) handle_set(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else if (!strcmp(command, "GET")) {
         if (command_and_args.size == 2) {
@@ -37,7 +38,7 @@ void process_command(int client_fd, str_array command_and_args) {
             rest->size = command_and_args.size - 1;
             handle_get(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else if (!strcmp(command, "CONFIG")) {
         if (command_and_args.size >= 2) {
@@ -45,7 +46,7 @@ void process_command(int client_fd, str_array command_and_args) {
             rest->size = command_and_args.size - 1;
             handle_config(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else if (!strcmp(command, "KEYS")) {
         if (command_and_args.size == 2) {
@@ -53,7 +54,7 @@ void process_command(int client_fd, str_array command_and_args) {
             rest->size = command_and_args.size - 1;
             handle_keys(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else if (!strcmp(command, "INFO")) {
         if (command_and_args.size >= 2) {
@@ -61,7 +62,7 @@ void process_command(int client_fd, str_array command_and_args) {
             rest->size = command_and_args.size - 1;
             handle_info(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else if (!strcmp(command, "REPLCONF")) {
         if (command_and_args.size >= 2) {
@@ -69,7 +70,7 @@ void process_command(int client_fd, str_array command_and_args) {
             rest->size = command_and_args.size - 1;
             handle_replconf(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else if (!strcmp(command, "PSYNC")) {
         if (command_and_args.size == 3) {
@@ -77,56 +78,71 @@ void process_command(int client_fd, str_array command_and_args) {
             rest->size = command_and_args.size - 1;
             handle_psync(client_fd, rest);
         } else {
-            error_flag = true;
+            cmd_error_flag = true;
         }
     } else {
-        handle_syntax_error(client_fd);
+        cmd_error_flag = true;
     }
-    if (error_flag) {
+    if (cmd_error_flag) {
         handle_syntax_error(client_fd);
     }
     free(rest);
+    
+    // return
+    if (!discard_command) {
+        return SAVE_TO_STATE;
+    } else if (discard_command && !cmd_error_flag) {
+        return DONT_SAVE_TO_STATE;
+    }
+    return RESULT_ERROR;
 }
 
-
-void respond_to_client(int client_fd, char* buffer) {
+// for simple response
+void respond_str_to_client(int client_fd, char* buffer) {
 	write(client_fd, buffer, strlen(buffer));
+}
+
+// to send bytes [eg. sending a file content]
+void respond_bytes_to_client(int client_fd, char* buffer, ssize_t n) {
+    write(client_fd, buffer, n);
 }
 
 void handle_syntax_error(int client_fd) {
     printf("Handling syntax err----\n");
     char* response = to_resp_bulk_str(SYNTAX_ERROR);
-    respond_to_client(client_fd, to_resp_bulk_str(SYNTAX_ERROR));
+    respond_str_to_client(client_fd, to_resp_bulk_str(SYNTAX_ERROR));
     free(response);
 }
 
-void handle_ping(int client_fd) {
+int handle_ping(int client_fd) {
 	printf("Handling ping---------\n");
 	char *pong = "+PONG\r\n";
-	respond_to_client(client_fd, pong);
+	respond_str_to_client(client_fd, pong);
+    return 0;
 }
 
 
-void handle_echo(int client_fd, str_array* arguments) {
+int handle_echo(int client_fd, str_array* arguments) {
     printf("Handling echo----\n");
     char* response = to_resp_bulk_str(arguments->array[0]);
-    respond_to_client(client_fd, response);
+    respond_str_to_client(client_fd, response);
     free(response);
+    return 0;
 }
 
-void handle_set(int client_fd, str_array* arguments) {
+int handle_set(int client_fd, str_array* arguments) {
     printf("Handling SET---\n");
     char* key = arguments->array[0];
     if (key == NULL) {
         printf("key is null; handle_set() at %d on %s", __LINE__, __FILE__);
         handle_syntax_error(client_fd);
-        return;
+        return -1;
     }
     char* value = arguments->array[1];
     if (value == NULL) {
         printf("value is null; handle_set() at %d on %s", __LINE__, __FILE__);
         handle_syntax_error(client_fd);
-        return;
+        return -1;
     }
     char* expiry_ms_str;
     char* PS = NULL;
@@ -142,54 +158,59 @@ void handle_set(int client_fd, str_array* arguments) {
     bool success = save_to_db(key, value, expires_in_epoch_ms);
     if (!success) {
         printf("saving to database failed\n");
-        return;
+        return -1;
     }
-    respond_to_client(client_fd, OK_RESPONSE);
+    respond_str_to_client(client_fd, OK_RESPONSE);
+    return 0;
 }
 
-void handle_get(int client_fd, str_array* arguments) {
+int handle_get(int client_fd, str_array* arguments) {
     printf("Handing get-----\n");
     char* key = arguments->array[0];
     
     Node* node = retrieve_from_db(key);
 
     if (node == NULL) {
-        respond_to_client(client_fd, NULL_BULK_STR);
-        return;
+        respond_str_to_client(client_fd, NULL_BULK_STR);
+        return -1;
     }
 
     /* compare against current system time */
     if (node->expiry_epoch_ms != -1 && node->expiry_epoch_ms < get_epoch_ms()) {
         // value has expired
         delete_node(node);
-        respond_to_client(client_fd, NULL_BULK_STR);
-        return;
+        respond_str_to_client(client_fd, NULL_BULK_STR);
+        return -1;
     }
 
     char* response = to_resp_bulk_str(node->value);
-    respond_to_client(client_fd, response);
+    respond_str_to_client(client_fd, response);
     free(response);
+    return 0;
 }
 
-void handle_keys(int client_fd, str_array* arguments) {
+int handle_keys(int client_fd, str_array* arguments) {
     printf("Handling keys...\n");
     char* pattern = arguments->array[0];
     str_array* keys = get_db_keys(pattern);
     char* response = to_resp_array(keys);
-    respond_to_client(client_fd, response);
+    respond_str_to_client(client_fd, response);
     free_str_array(keys);
     free(response);
+    return 0;
 }
 
-void handle_info(int client_fd, str_array* arguments) {
+int handle_info(int client_fd, str_array* arguments) {
     printf("Handling info...\n");
     __debug_print_config();
     // char* response = "role:%s\nconnected_slaves:%s\nmaster_replid:%s\nmaster_repl_offset:%s\nsecond_repl_offset:%s\nrepl_backlog_active:%s\nrepl_backlog_size:%s\nrepl_backlog_first_byte_offset:%s\nrepl_backlog_histlen:%s"
     char* raw_response;
     char *response;
+    int error;
     if (arguments == NULL) {
         __debug_printf(__LINE__, __FILE__, "arguments to info command is null. Returning all info\n");
-        respond_to_client(client_fd, to_resp_bulk_str("implement_all_keys"));
+        respond_str_to_client(client_fd, to_resp_bulk_str("implement_all_keys"));
+        error = -1;
     } else {
         if (!strcmp(arguments->array[0], REPLICATION)) {
             // this part is shit, but i ain't working on this anytime soon
@@ -222,52 +243,29 @@ void handle_info(int client_fd, str_array* arguments) {
             response_size += 1;
             raw_response = realloc(raw_response, response_size);
             strcat(raw_response, "\n");
+            error = 0;
         } else {
             __debug_printf(__LINE__, __FILE__, "info called with unimplemented argument\n");
             raw_response = to_resp_bulk_str("IMplement all keys\n");
+            error = -1;
         }
     }
     response = to_resp_bulk_str(raw_response);
-    respond_to_client(client_fd, response);
+    respond_str_to_client(client_fd, response);
     free(response);
     free(raw_response);
+    return error;
 }
 
-void handle_replconf(int client_fd, str_array* arguments) {
+int handle_replconf(int client_fd, str_array* arguments) {
     printf("Handling replconf...\n");
-    respond_to_client(client_fd, OK_RESPONSE);
+    respond_str_to_client(client_fd, OK_RESPONSE);
+    return 0;
 }
 
-#define HEX_STRING "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
-
-void hex_to_bytes(const char *hex_str, unsigned char **out_bytes, size_t *out_len) {
-    size_t hex_len = strlen(hex_str);
-    *out_len = hex_len / 2; // Two hex characters = 1 byte
-    *out_bytes = malloc(*out_len);
-    if (*out_bytes == NULL) {
-        perror("malloc failed");
-        exit(1);
-    }
-    ssize_t i = 0;
-    for (; i < *out_len; i++) {
-        sscanf(&hex_str[i * 2], "%2hhx", &(*out_bytes)[i]); // Read 2 hex chars as a byte
-    }
-}
-
-void codecrafters_send(int client_fd) {
-    unsigned char *byte_array = NULL;
-    ssize_t byte_len = 0;
-    hex_to_bytes(HEX_STRING, &byte_array, &byte_len);
-    char response[1024];
-    sprintf(response, "$%ld\r\n", byte_len);
-    int len = strlen(response);
-    memcpy((response + len), byte_array, byte_len);
-    respond_to_client(client_fd, response);
-}
-
-void handle_psync(int client_fd, str_array* arguments) {
+int handle_psync(int client_fd, str_array* arguments) {
     printf("Handling psync...\n");
-    bool error;
+    bool error = false;
     char* raw_response;
     char* response;
     if (!strcmp(arguments->array[0], "?") || !strcmp(arguments->array[1], "-1")) {
@@ -281,65 +279,83 @@ void handle_psync(int client_fd, str_array* arguments) {
             raw_response = malloc(((strlen(master_repl_id->value) + strlen(master_repl_offset->value)) * sizeof(char)) + 16);
             sprintf(raw_response, "+FULLRESYNC %s %s", master_repl_id->value, master_repl_offset->value);
             response = to_resp_simple_str(raw_response);
-            respond_to_client(client_fd, response);
+            respond_str_to_client(client_fd, response);
             free(response);
             free(raw_response);
-            // transfer_rdb_file(client_fd);
-            codecrafters_send(client_fd);
+            transfer_rdb_file(client_fd);
+            transfer_command_history(client_fd);
         }
     } else {
         error = true;
     }
     if (error) {
-        respond_to_client(client_fd, SYNTAX_ERROR);
+        respond_str_to_client(client_fd, SYNTAX_ERROR);
+        return -1;
     }
+    return 0;
 }
 
 /************** Config **************/
 
-void handle_config(int client_fd, str_array* command_and_args) {
+int handle_config(int client_fd, str_array* command_and_args) {
     char* command = command_and_args->array[0];
     str_array* args = malloc(sizeof(str_array));
+    int error;
 
     if (!strcmp(command, "GET")) {
         if (command_and_args->size == 2) {
             args->array = ((command_and_args->array) + 1);
             args->size = command_and_args->size - 1;
             handle_config_get(client_fd, args);
+            error = false;
         }
     } else {
         handle_syntax_error(client_fd);
+        error = true;
     }
     free(args);
+    return error;
 }
 
-void handle_config_get(int client_fd, str_array* args) {
+int handle_config_get(int client_fd, str_array* args) {
     printf("Handling config get-----\n");
     char* key = args->array[0];
 
     Node* node = retrieve_from_config(key);
 
     if (node == NULL) {
-        respond_to_client(client_fd, NULL_BULK_STR);
-        return;
+        respond_str_to_client(client_fd, NULL_BULK_STR);
+        return -1;
     }
 
     str_array* arr = create_str_array(key);
     append_to_str_array(&arr, node->value);
     char* response = to_resp_array(arr);
-    respond_to_client(client_fd, response);
+    respond_str_to_client(client_fd, response);
     free_str_array(arr);
     free(response);
+    return 0;
 }
 
 /************** Transfer Empty Config **************/
+
+void transfer_empty_rdb(int client_fd) {
+    unsigned char *byte_array = NULL;
+    size_t byte_len = 0;
+    hex_to_bytes(EMPTY_RDB_HEX, &byte_array, &byte_len);
+    char response[1024];
+    sprintf(response, "$%ld\r\n", byte_len);
+    int len = strlen(response);
+    memcpy((response + len), byte_array, byte_len);
+    respond_bytes_to_client(client_fd, response, len + byte_len );
+}
 
 void transfer_rdb_file(int client_fd) {
     char *response;
     Node* rdb_dir = retrieve_from_config(C_DIR);
     Node* rdb_filename = retrieve_from_config(C_DBFILENAME);
     if (!rdb_dir || !rdb_filename) {
-        __debug_printf(__LINE__, __FILE__, "RDB file details not present in the config\n");
+        transfer_empty_rdb(client_fd);
         return;
     }
     char* full_file_name = malloc(sizeof(char) * (strlen(rdb_dir->value) + strlen(rdb_filename->value)) + 2);
@@ -351,7 +367,17 @@ void transfer_rdb_file(int client_fd) {
     response = malloc(1 + ((f->size / 10) + 1) + 2 + f->size + 1);
     sprintf(response, "$%u\r\n", f->size);
     strcat(response, f->content);
-    respond_to_client(client_fd, response);
+    respond_bytes_to_client(client_fd, response, f->size);
     free(response);
     free_file_content(f);
+}
+
+void transfer_command_history(int client_fd) {
+    str_array* history = get_command_history();
+    if (history == NULL) {
+        return;
+    }
+    for (int i = 0; i < history->size; i++) {
+        respond_str_to_client(client_fd, history->array[i]);
+    }
 }

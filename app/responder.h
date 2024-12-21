@@ -11,27 +11,40 @@
 #include <assert.h>
 #include "util.h"
 
-void process_command(int client_fd, str_array);
+#define EMPTY_RDB_HEX "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 
-void respond_to_client(int fd, char* buffer);
+
+enum State_modification {
+    RESULT_ERROR = 0,
+    DONT_SAVE_TO_STATE,
+    SAVE_TO_STATE,
+};
+
+enum State_modification process_command(int client_fd, str_array);
+
+void respond_str_to_client(int fd, char* buffer);
+void respond_bytes_to_client(int fd, char* buffer, ssize_t);
 void handle_syntax_error(int client_fd);
 
 /* commands */
-void handle_ping(int);
-void handle_echo(int, str_array*);
-void handle_set(int client_fd, str_array*);
-void handle_get(int client_fd, str_array*);
-void handle_keys(int client_fd, str_array*);
-void handle_info(int client_fd, str_array*);
+int handle_ping(int);
+int handle_echo(int, str_array*);
+int handle_set(int client_fd, str_array*);
+int handle_get(int client_fd, str_array*);
+int handle_keys(int client_fd, str_array*);
+int handle_info(int client_fd, str_array*);
 
-void handle_replconf(int client_fd, str_array*);
-void handle_psync(int client_fd, str_array*);
+int handle_replconf(int client_fd, str_array*);
+int handle_psync(int client_fd, str_array*);
+
 
 /* Config */
-void handle_config(int, str_array*);
-void handle_config_get(int client_fd, str_array*);
+int handle_config(int, str_array*);
+int handle_config_get(int client_fd, str_array*);
 
 /* Transfer rdb */
+void transfer_empty_rdb(int client_fd);
 void transfer_rdb_file(int);
+void transfer_command_history(int);
 
 #endif

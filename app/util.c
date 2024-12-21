@@ -287,3 +287,17 @@ void free_file_content(file_content *f) {
 	free(f->content);
 	free(f);
 }
+
+void hex_to_bytes(const char *hex_str, unsigned char **out_bytes, size_t *out_len) {
+    size_t hex_len = strlen(hex_str);
+    *out_len = hex_len / 2; // Two hex characters = 1 byte
+    *out_bytes = malloc(*out_len);
+    if (*out_bytes == NULL) {
+        perror("malloc failed");
+        exit(1);
+    }
+    ssize_t i = 0;
+    for (; i < *out_len; i++) {
+        sscanf(&hex_str[i * 2], "%2hhx", &(*out_bytes)[i]); // Read 2 hex chars as a byte
+    }
+}

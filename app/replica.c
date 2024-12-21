@@ -127,5 +127,17 @@ void communicate_with_master() {
     free_str_array(psync);
     free(psync_request);
 
+    /* Remove on further implement */
+    char buffer[4096];
+    int recvsize = recv(sock, buffer, 4096, 0);
+
+    for (int i = 0; i < recvsize; i++) {
+        printf("%.2x\t", buffer[i]);
+        if (i % 16 == 0) {
+            printf("\n");
+        }
+    }
+    /* end */
+
     close(sock);
 }

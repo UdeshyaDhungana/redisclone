@@ -23,3 +23,6 @@ void __debug_printf_strptr(char** ptr) {
 		printf("%s-\n",ptr[i]);
 	}
 }
+
+
+// #define DEBUG_PRINT(...) __debug_printf(__LINE__, __FILE__, __VA_ARGS__);

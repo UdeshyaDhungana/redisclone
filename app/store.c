@@ -16,7 +16,8 @@ GlobalStore GS = {
         .index = 0,
         // we are ignoring other things like number of keys with expriy and not you can add that by reading
         // save_to_db_info and retrieve_from_db_info
-    }
+    },
+    .command_history = NULL
 };
 
 /* debug */
@@ -166,7 +167,6 @@ int init_db(ConfigOptions* c) {
     unsigned int expiry_s = 0;
     bool save_success;
     while (type_identifier != CHECKSUM_START) {
-        exit(1);
         if (type_identifier == EXPIRY_PAIR_MS) {
             // the 8 byte that follows is timestamp in ms
             file_offset = copy_ms_from_file_contents(&expiry_ms, f->content, file_offset);
@@ -217,6 +217,7 @@ int init_db(ConfigOptions* c) {
     // now you have to refactor the code, and read the entire file into a string
     // skip the checksum part and let's test the code
     free_file_content(f);
+    __debug_print_DB();
     return num_keys;
 }
 
@@ -429,4 +430,18 @@ str_array* get_db_keys(char* pattern) {
     }
     print_str_array(result, '\n');
     return result;
+}
+
+/* Command history */
+bool add_to_command_history(char command[]) {
+    // print_str_array(GS.command_history, '\t');
+    if (GS.command_history == NULL) {
+        GS.command_history = create_str_array(command);
+        return true;
+    }
+    return append_to_str_array(&GS.command_history, command);
+}
+
+str_array* get_command_history() {
+    return GS.command_history;
 }

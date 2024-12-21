@@ -184,8 +184,9 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-void handle_client_request(int client_fd, char buffer[]) {
-	str_array* lines = split_input_lines(buffer);
+// we should prolly 'parse' the request if we intend to support multiple commands in a single request feature in future. leaving this as it is for now.
+void handle_client_request(int client_fd, char command[]) {
+	str_array* lines = split_input_lines(command);
 	int num_elements;
 	num_elements = check_syntax(lines);
 	/* syntax error */
@@ -194,9 +195,12 @@ void handle_client_request(int client_fd, char buffer[]) {
 			return;
 	}
 	str_array* command_and_args = command_extraction(lines, num_elements);
-	process_command(client_fd, *command_and_args);
+	enum State_modification modify =  process_command(client_fd, *command_and_args);
 	free_str_array(command_and_args);
 	free_str_array(lines);
+	if (modify == SAVE_TO_STATE) {
+		add_to_command_history(command);
+	}
 }
 
 

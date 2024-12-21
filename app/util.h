@@ -53,4 +53,6 @@ bool hostname_to_ip(char* hostname, char ip[16]);
 file_content* read_entire_file(const char*);
 void free_file_content(file_content*);
 
+void hex_to_bytes(const char *hex_str, unsigned char **out_bytes, size_t *out_len);
+
 #endif

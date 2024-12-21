@@ -9,15 +9,19 @@
 // return a linked list, each node is a line
 // caller should call free() on the returned pointer
 str_array* split_input_lines(char* user_input) {
+	// so we don't modify user_input
+	char* user_input_copy = malloc(1 + (strlen(user_input) * sizeof(char)));
+	strcpy(user_input_copy, user_input);
     const char* delim = "\r\n";
 	char **lines = NULL;
 	int line_count = 0;
 
-	char *token = strtok(user_input, delim);
+	char *token = strtok(user_input_copy, delim);
 	while (token != NULL) {
 		lines = realloc(lines, (line_count + 1) * sizeof(char *));
 		if (lines == NULL) {
 			printf("realloc : %s", strerror(errno));
+			free(user_input_copy);
 			return NULL;
 		}
 
@@ -25,6 +29,7 @@ str_array* split_input_lines(char* user_input) {
 		lines[line_count] = malloc(strlen(token) + 1);
 		if (lines[line_count] == NULL) {
 			printf("malloc : %s", strerror(errno));
+			free(user_input_copy);
 			return NULL;
 		}
 		strcpy(lines[line_count], token);
@@ -34,6 +39,7 @@ str_array* split_input_lines(char* user_input) {
 	str_array *s = (str_array*)malloc(sizeof(str_array));
 	s->array = lines;
 	s->size = line_count;
+	free(user_input_copy);
 	return s;
 }
 
