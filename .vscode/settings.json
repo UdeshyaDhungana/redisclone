@@ -7,7 +7,8 @@
         "util.h": "c",
         "parser.h": "c",
         "netdb.h": "c",
-        "inet.h": "c"
+        "inet.h": "c",
+        "replica.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled",
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"

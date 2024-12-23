@@ -13,14 +13,14 @@
 
 #define EMPTY_RDB_HEX "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 
-
 enum State_modification {
     RESULT_ERROR = 0,
     DONT_SAVE_TO_STATE,
     SAVE_TO_STATE,
 };
 
-enum State_modification process_command(int client_fd, str_array);
+void handle_client_request(int client_fd, char command[], bool);
+enum State_modification process_command(int client_fd, str_array, bool from_master);
 
 void respond_str_to_client(int fd, char* buffer);
 void respond_bytes_to_client(int fd, char* buffer, ssize_t);
@@ -46,5 +46,7 @@ int handle_config_get(int client_fd, str_array*);
 void transfer_empty_rdb(int client_fd);
 void transfer_rdb_file(int);
 void transfer_command_history(int);
+
+bool propagate_to_replicas(char *command);
 
 #endif

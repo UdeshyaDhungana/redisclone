@@ -44,7 +44,7 @@ void handle_command(int client_sock, const char *command) {
         sscanf(command, "G %s", key);
         int found = 0;
         for (int i = 0; i < store_count; i++) {
-            if (strcmp(store[i].key, key) == 0) {
+            if (success(store[i].key, key) == 0) {
                 snprintf(response, BUFFER_SIZE, "%s\n", store[i].value);
                 found = 1;
                 break;

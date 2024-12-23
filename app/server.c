@@ -25,7 +25,6 @@
 #define PORT 6379
 #define BUFFER_SIZE 1024
 
-void handle_client_request(int, char[]);
 void set_non_blocking(int);
 void set_reuse(int);
 void print_help();
@@ -176,31 +175,12 @@ int main(int argc, char** argv) {
 					}	
 				} else {
 					buffer[bytes_read] = '\0';
-					handle_client_request(client_fd, buffer);
+					handle_client_request(client_fd, buffer, false);
 				}
 			}
 		}
 	}
 	return 0;
-}
-
-// we should prolly 'parse' the request if we intend to support multiple commands in a single request feature in future. leaving this as it is for now.
-void handle_client_request(int client_fd, char command[]) {
-	str_array* lines = split_input_lines(command);
-	int num_elements;
-	num_elements = check_syntax(lines);
-	/* syntax error */
-	if (!num_elements) {
-			handle_syntax_error(client_fd);
-			return;
-	}
-	str_array* command_and_args = command_extraction(lines, num_elements);
-	enum State_modification modify =  process_command(client_fd, *command_and_args);
-	free_str_array(command_and_args);
-	free_str_array(lines);
-	if (modify == SAVE_TO_STATE) {
-		add_to_command_history(command);
-	}
 }
 
 

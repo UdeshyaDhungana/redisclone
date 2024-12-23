@@ -83,6 +83,8 @@ typedef struct GlobalStore {
     Node* metadata;
     DB_Info db_info;
     str_array* command_history;
+    // list of connected file fds
+    int_array* client_fds;
 } GlobalStore;
 
 // debug
@@ -131,5 +133,9 @@ str_array* get_db_keys(char* pattern);
 // command history
 bool add_to_command_history(char[]);
 str_array* get_command_history();
+
+bool add_to_client_fds(int fd);
+int_array* get_connected_client_fds();
+
 
 #endif

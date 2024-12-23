@@ -13,7 +13,7 @@ TARGET = redis
 
 # Default target
 master: $(TARGET)
-	./redis --dir /home/udeshya --dbfilename orange.rdb
+	./redis --dir /home/udeshya
 
 slave: $(TARGET)
 	./redis --dir /home/udeshya --replicaof "localhost 6379" --port 10000

@@ -17,7 +17,8 @@ GlobalStore GS = {
         // we are ignoring other things like number of keys with expriy and not you can add that by reading
         // save_to_db_info and retrieve_from_db_info
     },
-    .command_history = NULL
+    .command_history = NULL,
+    .client_fds = NULL
 };
 
 /* debug */
@@ -434,14 +435,26 @@ str_array* get_db_keys(char* pattern) {
 
 /* Command history */
 bool add_to_command_history(char command[]) {
-    // print_str_array(GS.command_history, '\t');
     if (GS.command_history == NULL) {
         GS.command_history = create_str_array(command);
         return true;
     }
-    return append_to_str_array(&GS.command_history, command);
+    return (!append_to_str_array(&GS.command_history, command));
 }
 
 str_array* get_command_history() {
     return GS.command_history;
 }
+
+bool add_to_client_fds(int fd) {
+    int res = append_to_int_array(&(GS.client_fds), fd);
+    if (res == 0) {
+        return true;
+    }
+    return false;
+}
+
+int_array* get_connected_client_fds() {
+    return GS.client_fds;
+}
+

@@ -8,11 +8,44 @@ char* OK_RESPONSE = "+OK\r\n";
 char* NULL_BULK_STR = "$-1\r\n";
 char* NOT_SUPPORTED = "Command %s not supported";
 
-enum State_modification process_command(int client_fd, str_array command_and_args) {
+/*
+client_fd -> fd to write data to
+reply -> if yes: it will write response to client_fd, else it will do so in -1
+low level implementation ignores response when client_fd = -1 in write_str_to_client() and write_bytes_to_client()
+*/
+void handle_client_request(int client_fd, char command[], bool from_master) {
+	bool success;
+	str_array* lines = split_input_lines(command);
+	int num_elements;
+	num_elements = check_syntax(lines);
+	/* syntax error */
+	if (!num_elements) {
+			handle_syntax_error(client_fd);
+			return;
+	}
+	str_array* command_and_args = command_extraction(lines, num_elements);
+	enum State_modification modify =  process_command(client_fd, *command_and_args, from_master);
+	free_str_array(command_and_args);
+	free_str_array(lines);
+	if (modify == SAVE_TO_STATE) {
+		add_to_command_history(command);
+		success = propagate_to_replicas(command);
+		if (!success) {
+			__debug_printf(__LINE__, __FILE__, "failed to propagate replica\n");
+		}
+	}
+}
+
+
+enum State_modification process_command(int client_fd, str_array command_and_args, bool from_master) {
+    int client_fd_copy = client_fd;
     char* command = command_and_args.array[0];
     str_array *rest = malloc(sizeof(str_array));
     bool cmd_error_flag = false;
     bool discard_command = true;
+    if (from_master) {
+        client_fd = -1;
+    }
 
     if (!strcmp(command, "PING")) {
         handle_ping(client_fd);
@@ -66,6 +99,7 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
         }
     } else if (!strcmp(command, "REPLCONF")) {
         if (command_and_args.size >= 2) {
+            client_fd = client_fd_copy;
             rest->array = ((command_and_args.array) + 1);
             rest->size = command_and_args.size - 1;
             handle_replconf(client_fd, rest);
@@ -99,12 +133,17 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
 
 // for simple response
 void respond_str_to_client(int client_fd, char* buffer) {
-	write(client_fd, buffer, strlen(buffer));
+    if (client_fd > -1) {
+        printf("Sending length %lu content: %s\n", strlen(buffer), buffer);
+        write(client_fd, buffer, strlen(buffer));
+    }
 }
 
 // to send bytes [eg. sending a file content]
 void respond_bytes_to_client(int client_fd, char* buffer, ssize_t n) {
-    write(client_fd, buffer, n);
+    if (client_fd > -1) {
+        write(client_fd, buffer, n);
+    }
 }
 
 void handle_syntax_error(int client_fd) {
@@ -259,7 +298,20 @@ int handle_info(int client_fd, str_array* arguments) {
 
 int handle_replconf(int client_fd, str_array* arguments) {
     printf("Handling replconf...\n");
-    respond_str_to_client(client_fd, OK_RESPONSE);
+    char* command = arguments->array[0];
+    if (!strcmp(command, "listening-port") || !strcmp(command, "capa")) {
+        respond_str_to_client(client_fd, OK_RESPONSE);
+    } else if (!strcmp(command, "GETACK")) {
+        str_array* s = create_str_array("REPLCONF");
+        append_to_str_array(&s, "ACK");
+        append_to_str_array(&s, "0");
+        char* response = to_resp_array(s);
+        respond_str_to_client(client_fd, response);
+        free(response);
+        free_str_array(s);
+    } else {
+        handle_syntax_error(client_fd);
+    }
     return 0;
 }
 
@@ -268,6 +320,7 @@ int handle_psync(int client_fd, str_array* arguments) {
     bool error = false;
     char* raw_response;
     char* response;
+    bool success;
     if (!strcmp(arguments->array[0], "?") || !strcmp(arguments->array[1], "-1")) {
         // slave connecting to master for the first time
         Node* master_repl_id = retrieve_from_config(MASTER_REPLID);
@@ -277,19 +330,33 @@ int handle_psync(int client_fd, str_array* arguments) {
             error = true;
         } else {
             raw_response = malloc(((strlen(master_repl_id->value) + strlen(master_repl_offset->value)) * sizeof(char)) + 16);
-            sprintf(raw_response, "+FULLRESYNC %s %s", master_repl_id->value, master_repl_offset->value);
+            sprintf(raw_response, "FULLRESYNC %s %s", master_repl_id->value, master_repl_offset->value);
             response = to_resp_simple_str(raw_response);
             respond_str_to_client(client_fd, response);
             free(response);
             free(raw_response);
             transfer_rdb_file(client_fd);
-            transfer_command_history(client_fd);
+            // i am disabling this for now; in case we need it, i'll bring it back
+            // disabling this makes parsing replica easy
+            // transfer_command_history(client_fd);
+            success = add_to_client_fds(client_fd);
+            if (!success) {
+                __debug_printf(__LINE__, __FILE__, "failed to save to client fds\n");
+            } else {
+                printf("Saved to replicas\n");
+            }
+            char buf[1024];
+            char rbuf[1024];
+            buf[0] = 0;
+            strcpy(buf, "*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n");
+            send(client_fd, buf, strlen(buf), 0);
+            recv(client_fd, rbuf, 1000, 0);
         }
     } else {
         error = true;
     }
     if (error) {
-        respond_str_to_client(client_fd, SYNTAX_ERROR);
+        handle_syntax_error(client_fd);
         return -1;
     }
     return 0;
@@ -364,6 +431,10 @@ void transfer_rdb_file(int client_fd) {
     strcat(full_file_name, rdb_filename->value);
 
     file_content* f = read_entire_file(full_file_name);
+    if (!f) {
+        transfer_empty_rdb(client_fd);
+        return;
+    }
     response = malloc(1 + ((f->size / 10) + 1) + 2 + f->size + 1);
     sprintf(response, "$%u\r\n", f->size);
     strcat(response, f->content);
@@ -377,7 +448,19 @@ void transfer_command_history(int client_fd) {
     if (history == NULL) {
         return;
     }
+    printf("Sending command history...\n");
     for (int i = 0; i < history->size; i++) {
         respond_str_to_client(client_fd, history->array[i]);
     }
+}
+
+bool propagate_to_replicas(char *command) {
+    int_array* client_fds = get_connected_client_fds();
+    if (client_fds == NULL) {
+        return true;
+    }
+    for (int i = 0; i < client_fds->size; i++) {
+        respond_str_to_client(client_fds->array[i], command);
+    }
+    return true;
 }

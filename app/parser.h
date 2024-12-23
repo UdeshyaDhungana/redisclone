@@ -8,6 +8,9 @@
 #include <stdbool.h>
 #include "util.h"
 
+// will work for most of the test cases
+#define BUFFER_LEN 4096
+
 str_array* split_input_lines(char* user_input);
 
 ssize_t sizeof_ptr_array(char** p);

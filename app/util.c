@@ -186,6 +186,46 @@ void print_str_array(str_array *s, char delim) {
 	printf("]\n");
 }
 
+int_array* create_int_array(int element) {
+	int_array* res = malloc(1 * sizeof(int_array));
+	if (res == NULL) {
+		__debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
+		return NULL;
+	}
+	res->array = malloc(1 * sizeof(int));
+	if (!res->array) {
+		__debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
+		free(res);
+		return NULL;
+	}
+	(res->array)[0] = element;
+	(res->size) = 1;
+	return res;
+}
+
+int append_to_int_array(int_array** arr, int element) {
+	if (*arr == NULL) {
+		*arr = create_int_array(element);
+		if (arr != NULL) {
+			return 0;
+		}
+		return -1;
+	} else {
+		(*arr)->array = (int*) realloc((*arr)->array, (1 + (*arr)->size) * sizeof(int));
+		(*arr)->array[(*arr)->size] = element;
+		(*arr)->size += 1;
+	}
+	return 0;
+}
+
+void free_int_array(int_array* arr) {
+	if (arr == NULL) {
+		return;
+	}
+	free(arr->array);
+	free(arr);
+}
+
 bool match_str(char* pattern, char* string) {
 	return true;
 }

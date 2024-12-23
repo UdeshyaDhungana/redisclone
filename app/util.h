@@ -34,6 +34,11 @@ typedef struct str_array {
 	unsigned int size;
 } str_array;
 
+typedef struct int_array {
+	int* array;
+	unsigned int size;
+} int_array;
+
 typedef struct file_content {
 	char* content;
 	unsigned int size;
@@ -43,6 +48,12 @@ str_array* create_str_array(const char* element);
 int append_to_str_array(str_array** array, const char* element);
 void free_str_array(str_array *s);
 void print_str_array(str_array *s, char delim);
+
+int_array* create_int_array(int);
+int append_to_int_array(int_array**, int);
+void free_int_array(int_array*);
+
+
 int parse_master_host_and_port(char* host_and_port_string, char** host, unsigned int *port);
 
 bool match_str(char* pattern, char* string);
