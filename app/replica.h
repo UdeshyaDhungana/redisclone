@@ -6,7 +6,8 @@
 #include <sys/socket.h>
 #include "parser.h"
 
-bool extract_rdb_file(char*, char*);
-void extract_master_command(char*, int*, int);
+ssize_t parse_full_resync(char*, size_t);
+ssize_t parse_rdb_file(char*, char*, size_t);
+void parse_master_command(char*, int*, int);
 void* process_master_command_thread(void *arg);
 void communicate_with_master();

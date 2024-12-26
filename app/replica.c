@@ -1,24 +1,44 @@
 #include "replica.h"
 #include "responder.h"
 
-bool extract_rdb_file(char* buffer, char* rdb_file) {
-    int file_size;
+// responsible for parsing full resync command from master, clears the full_resync_command_from_buffer
+// returns index of the end of designated section
+ssize_t parse_full_resync(char* buffer, size_t content_size) {
+    for (ssize_t i = 0; i < content_size; i++) {
+        // find the beginning of rdb file stream
+        if (buffer[i] == '$') {
+            return i;
+        }
+    }
+    return -1;
+}
 
+ssize_t parse_rdb_file(char* buffer, char* rdb_file, size_t write_offset) {
+    int file_size;
+    char* checksum_start;
     char* size_begin = strstr(buffer, "$");
     if (!size_begin) {
-        return false;
+        return -1;
     }
     char* size_end = strstr(size_begin, "\r\n");
     if (!size_end) {
-        return false;
+        return -1;
     }
     *size_end = 0;
     file_size = atoi(size_begin + 1);
+    // check if the entire file is contained in the buffer
+    if (((buffer + write_offset) - (size_end + 1)) / sizeof(char) < file_size) {
+        return -1;
+    }
+    checksum_start = (size_end + 1 + file_size) - (8 * sizeof(char));
+    if (!((*checksum_start) == CHECKSUM_START)) {
+        return -1;
+    }
     memcpy(rdb_file, size_end + 2, file_size);
-    return true;
+    return (size_end + 2 + file_size - buffer);
 }
 
-void extract_master_command(char* buffer, int* write_offset, int master_fd) {
+void parse_master_command(char* buffer, int* write_offset, int master_fd) {
     int arr_size;
     char arr_size_str[16];
     int command_size;
@@ -29,7 +49,6 @@ void extract_master_command(char* buffer, int* write_offset, int master_fd) {
         if (buffer[0] != '*') {
             return;
         }
-
         char* arr_len_start = buffer + 1;
         char* arr_len_end = strstr(buffer, "\r\n");
         for (i = 0; arr_len_start + i != arr_len_end; i++) {
@@ -57,29 +76,40 @@ void extract_master_command(char* buffer, int* write_offset, int master_fd) {
 }
 
 void* process_master_command_thread(void *arg) {
-    int master_fd = *(int*)arg;
+    int master_fd = (int)arg;
     char buffer[BUFFER_LEN];
+    // right now, i'm assuming that rdb file will not be more than 4096 bytes; if so, i'll prolly have to malloc some shit
     char rdb_file[BUFFER_LEN];
     int write_offset = 0;
     ssize_t bytes_recvd;
-    bool file_read = false;
-
+    bool file_parsed = false;
+    bool full_resync_parsed = false;
     memset(buffer, 0, sizeof(buffer));
+    ssize_t parse_fullresync_result;
+    ssize_t parse_rdb_file_result;
     // assuming file and commands aren't sent in a same buffer; i really need to learn network programming
     while (1) {
         bytes_recvd = recv(master_fd, buffer + write_offset, sizeof(buffer) - 1, 0);
-        printf("received: %s\n", buffer);
         if (bytes_recvd > 0) {
-            if (!file_read) {
-                if (extract_rdb_file(buffer, rdb_file)) {
-                    file_read = true;
+            write_offset += bytes_recvd;
+            if (!full_resync_parsed) {
+                parse_fullresync_result = parse_full_resync(buffer, write_offset);
+                if (parse_fullresync_result > -1) {
+                    full_resync_parsed = true;
+                    memmove(buffer, buffer + write_offset, write_offset - parse_fullresync_result);
                     write_offset = 0;
-                    memset(buffer, 0, sizeof (buffer));
-                } else {
-                    write_offset += bytes_recvd;
-                }
-            } else {
-                extract_master_command(buffer, &write_offset, master_fd);
+                } else continue;
+            }
+            if (!file_parsed) {
+                parse_rdb_file_result = parse_rdb_file(buffer, rdb_file, write_offset);
+                if (parse_rdb_file_result > -1) {
+                    file_parsed = true;
+                    memmove(buffer, buffer + parse_rdb_file_result, write_offset - parse_rdb_file_result);
+                    write_offset = 0;
+                } else continue;
+            } 
+            if (full_resync_parsed && file_parsed) {
+                parse_master_command(buffer, &write_offset, master_fd);
             }
         } else if (bytes_recvd == 0) {
             printf("Master closed the connection\n");
@@ -220,8 +250,9 @@ void communicate_with_master() {
 
     // create a separate thread to handle master's propagation
     pthread_t process_master_command_thread_id;
-    if (pthread_create(&process_master_command_thread_id, NULL, process_master_command_thread, &master_fd) != 0) {
+    if (pthread_create(&process_master_command_thread_id, NULL, process_master_command_thread, (void*)master_fd) != 0) {
         __debug_printf(__LINE__, __FILE__, "thread creation failed: %s\n", strerror(errno));
     }
+
     pthread_detach(process_master_command_thread_id);
 }

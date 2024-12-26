@@ -107,7 +107,7 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "PSYNC")) {
-        if (command_and_args.size == 3) {
+        if (command_and_args.size == 3) {  
             rest->array = ((command_and_args.array) + 1);
             rest->size = command_and_args.size - 1;
             handle_psync(client_fd, rest);
@@ -134,7 +134,6 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
 // for simple response
 void respond_str_to_client(int client_fd, char* buffer) {
     if (client_fd > -1) {
-        printf("Sending length %lu content: %s\n", strlen(buffer), buffer);
         write(client_fd, buffer, strlen(buffer));
     }
 }
@@ -309,6 +308,8 @@ int handle_replconf(int client_fd, str_array* arguments) {
         respond_str_to_client(client_fd, response);
         free(response);
         free_str_array(s);
+    } else if (!strcmp(command, "ACK")) {
+        // pass lmao
     } else {
         handle_syntax_error(client_fd);
     }
@@ -345,11 +346,15 @@ int handle_psync(int client_fd, str_array* arguments) {
             } else {
                 printf("Saved to replicas\n");
             }
-            char buf[1024];
             char rbuf[1024];
-            buf[0] = 0;
-            strcpy(buf, "*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n");
-            send(client_fd, buf, strlen(buf), 0);
+            char* command = REPLCONF;
+            str_array* cmd_array = create_str_array(command);
+            append_to_str_array(&cmd_array, GETACK);
+            append_to_str_array(&cmd_array, "0");
+            char* response = to_resp_array(cmd_array);
+            respond_str_to_client(client_fd, response);
+            free(response);
+            free_str_array(cmd_array);
             recv(client_fd, rbuf, 1000, 0);
         }
     } else {

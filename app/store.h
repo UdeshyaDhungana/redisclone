@@ -16,6 +16,8 @@
 #define C_DBFILENAME "dbfilename"
 #define INDEX "index"
 #define REPLICATION "replication"
+#define REPLCONF "REPLCONF"
+#define GETACK "GETACK"
 /* keys */
 #define ROLE "role"
 #define REPLICAOF "replicaof"

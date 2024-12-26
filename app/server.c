@@ -153,8 +153,9 @@ int main(int argc, char** argv) {
 					continue;
 				}
 				set_non_blocking(client_fd);
+				struct epoll_event event = {0};  
 				event.data.fd = client_fd;
-				event.events = EPOLLIN | EPOLLET;
+				event.events = EPOLLIN | EPOLLET; 
 				epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event);
 
 				printf("Client connected!\n");

@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 
+#define POLY 0xC96C5795D7870F42ULL // ECMA polynomial
 
 int split_string(char* source, char delim, char** left, char** right);
 void free_ptr_to_char_ptr(char**);
@@ -27,7 +28,6 @@ long long choose_between_expiries(unsigned long long, unsigned int);
 unsigned int copy_from_file_contents(char* dst, char* src, unsigned int offset, unsigned int num, bool null_terminate);
 unsigned int copy_ms_from_file_contents(long long unsigned int* expiry_ms, char* file_contents, unsigned int offset);
 unsigned int copy_seconds_from_file_contents(unsigned int* expiry_s, char* file_contents, unsigned int offset);
-
 
 typedef struct str_array {
 	char** array;
