@@ -134,6 +134,7 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
 // for simple response
 void respond_str_to_client(int client_fd, char* buffer) {
     if (client_fd > -1) {
+        printf("Sending length %d. Content: %s\n", strlen(buffer), buffer);
         write(client_fd, buffer, strlen(buffer));
     }
 }
@@ -298,12 +299,16 @@ int handle_info(int client_fd, str_array* arguments) {
 int handle_replconf(int client_fd, str_array* arguments) {
     printf("Handling replconf...\n");
     char* command = arguments->array[0];
+    int replconf;
+    char replconf_str[16];
     if (!strcmp(command, "listening-port") || !strcmp(command, "capa")) {
         respond_str_to_client(client_fd, OK_RESPONSE);
     } else if (!strcmp(command, "GETACK")) {
         str_array* s = create_str_array("REPLCONF");
         append_to_str_array(&s, "ACK");
-        append_to_str_array(&s, "0");
+        replconf = get_replconf();
+        sprintf(replconf_str, "%d", replconf);
+        append_to_str_array(&s, replconf_str);
         char* response = to_resp_array(s);
         respond_str_to_client(client_fd, response);
         free(response);
@@ -344,18 +349,8 @@ int handle_psync(int client_fd, str_array* arguments) {
             if (!success) {
                 __debug_printf(__LINE__, __FILE__, "failed to save to client fds\n");
             } else {
-                printf("Saved to replicas\n");
+                printf("FD %d is saved to replicas\n", client_fd);
             }
-            char rbuf[1024];
-            char* command = REPLCONF;
-            str_array* cmd_array = create_str_array(command);
-            append_to_str_array(&cmd_array, GETACK);
-            append_to_str_array(&cmd_array, "0");
-            char* response = to_resp_array(cmd_array);
-            respond_str_to_client(client_fd, response);
-            free(response);
-            free_str_array(cmd_array);
-            recv(client_fd, rbuf, 1000, 0);
         }
     } else {
         error = true;

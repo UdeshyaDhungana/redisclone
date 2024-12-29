@@ -18,6 +18,7 @@ GlobalStore GS = {
         // save_to_db_info and retrieve_from_db_info
     },
     .command_history = NULL,
+    .replconf = 0,
     .client_fds = NULL
 };
 
@@ -458,3 +459,12 @@ int_array* get_connected_client_fds() {
     return GS.client_fds;
 }
 
+// replconf
+bool add_replconf(size_t n) {
+    GS.replconf += n;
+    return true;
+}
+
+size_t get_replconf() {
+    return GS.replconf;
+}

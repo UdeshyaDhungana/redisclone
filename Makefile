@@ -13,10 +13,10 @@ TARGET = redis
 
 # Default target
 master: $(TARGET)
-	./redis --dir /home/udeshya
+	./redis
 
 slave: $(TARGET)
-	./redis --dir /home/udeshya --replicaof "localhost 6379" --port 10000
+	./redis --replicaof "localhost 6379" --port 10000
 
 # Rule to build the executable by linking object files
 $(TARGET): $(OBJ)

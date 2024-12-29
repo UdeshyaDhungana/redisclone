@@ -38,44 +38,77 @@ ssize_t parse_rdb_file(char* buffer, char* rdb_file, size_t write_offset) {
     return (size_end + 2 + file_size - buffer);
 }
 
-void parse_master_command(char* buffer, int* write_offset, int master_fd) {
+/* this sphagetti code is the reason why i want to do a json parsor and get better at parsing */
+void process_master_command(char* buffer, int master_fd) {
     int arr_size;
     char arr_size_str[16];
     int command_size;
-    char* command;
+    char* command, *arr_len_start, *arr_len_end, *delimiter;
     int i;
-    ssize_t remaning_length;
-    while(1) {
-        if (buffer[0] != '*') {
-            return;
-        }
-        char* arr_len_start = buffer + 1;
-        char* arr_len_end = strstr(buffer, "\r\n");
-        for (i = 0; arr_len_start + i != arr_len_end; i++) {
-            arr_size_str[i] = arr_len_start[i];
-        }
-        arr_size_str[i] = 0;
-        arr_size = atoi(arr_size_str);
-        
-        char* delimeter = buffer;
-        for (i = 0; i < (1 + 2 * arr_size); i++) {
-            delimeter = strstr(delimeter, "\r\n");
-            delimeter += 2;
-        }
-        delimeter -= 1;
-        command_size = 1 + (delimeter - buffer) / (sizeof(char));
+    ssize_t remaining_length, command_length;
+    ssize_t recv_length = strlen(buffer);
+    ssize_t write_offset = 0;
+    str_array* lines;
+    if (recv_length == 0) goto recv_from_master;
+    do {
+        while (1) {
+            write_offset += recv_length;
+            if (buffer[0] != '*' && recv_length > 0) {
+                goto loop_end;
+            }
+            arr_len_start = buffer + 1;
+            arr_len_end = strstr(buffer, "\r\n");
+            for (i = 0; arr_len_start + i != arr_len_end; i++) {
+                arr_size_str[i] = arr_len_start[i];
+            }
+            arr_size_str[i] = 0;
+            arr_size = atoi(arr_size_str);
+            
+            delimiter = buffer;
+            for (i = 0; i < (1 + 2 * arr_size); i++) {
+                delimiter = strstr(delimiter, "\r\n");
+                if (delimiter == NULL) {
+                    goto recv_from_master;
+                }
+                delimiter += 2;
+            }
+            command_size = (delimiter - buffer) / (sizeof(char));
 
-        command = malloc((command_size + 1)* sizeof(char));
-        memcpy(command, buffer, command_size);
-        command[command_size] = 0;
-        handle_client_request(master_fd, command, true);
-        remaning_length = strlen(delimeter + 1);
-        memmove(buffer, delimeter + 1, strlen(delimeter + 1));
-        memset(buffer + remaning_length, 0, BUFFER_LEN - remaning_length);
-    }
+            command = malloc((command_size + 1)* sizeof(char));
+            memcpy(command, buffer, command_size);
+            command[command_size] = 0;
+
+            lines = split_input_lines(command);
+            if (!check_syntax(lines)) {
+                free(command);
+                free_str_array(lines);
+                goto syntax_failed;
+            }
+            handle_client_request(master_fd, command, true);
+            command_length = strlen(command);
+            add_replconf(command_length);
+            free(command);
+            free_str_array(lines);
+            remaining_length = strlen(delimiter);
+            memmove(buffer, delimiter, remaining_length);
+            memset(buffer + remaining_length, 0, command_size);
+            write_offset -= command_length;
+            if (strlen(buffer) == 0) break;
+        }
+recv_from_master:
+        recv_length = recv(master_fd, buffer + write_offset, BUFFER_LEN - 1 - write_offset, 0);
+    } while (recv_length > 0);
+    __debug_printf(__LINE__, __FILE__, "master broke connection :(\n");
+    return;
+loop_end:
+    __debug_printf(__LINE__, __FILE__, "buffer does not start with *, invariant not maintained\n");
+    return;
+syntax_failed:
+    __debug_printf(__LINE__, __FILE__, "syntax check failed\n");
+    return;
 }
 
-void* process_master_command_thread(void *arg) {
+void* process_master_communication_thread(void *arg) {
     int master_fd = (int)arg;
     char buffer[BUFFER_LEN];
     // right now, i'm assuming that rdb file will not be more than 4096 bytes; if so, i'll prolly have to malloc some shit
@@ -88,7 +121,7 @@ void* process_master_command_thread(void *arg) {
     ssize_t parse_fullresync_result;
     ssize_t parse_rdb_file_result;
     // assuming file and commands aren't sent in a same buffer; i really need to learn network programming
-    while (1) {
+    while (!file_parsed || !full_resync_parsed) {
         bytes_recvd = recv(master_fd, buffer + write_offset, sizeof(buffer) - 1, 0);
         if (bytes_recvd > 0) {
             write_offset += bytes_recvd;
@@ -96,8 +129,9 @@ void* process_master_command_thread(void *arg) {
                 parse_fullresync_result = parse_full_resync(buffer, write_offset);
                 if (parse_fullresync_result > -1) {
                     full_resync_parsed = true;
-                    memmove(buffer, buffer + write_offset, write_offset - parse_fullresync_result);
-                    write_offset = 0;
+                    memmove(buffer, buffer + parse_fullresync_result, write_offset - parse_fullresync_result);
+                    memset(buffer + (write_offset - parse_fullresync_result), 0, parse_fullresync_result);
+                    write_offset -= parse_fullresync_result;
                 } else continue;
             }
             if (!file_parsed) {
@@ -105,20 +139,18 @@ void* process_master_command_thread(void *arg) {
                 if (parse_rdb_file_result > -1) {
                     file_parsed = true;
                     memmove(buffer, buffer + parse_rdb_file_result, write_offset - parse_rdb_file_result);
-                    write_offset = 0;
+                    memset(buffer + (write_offset - parse_rdb_file_result), 0, parse_rdb_file_result);
                 } else continue;
             } 
-            if (full_resync_parsed && file_parsed) {
-                parse_master_command(buffer, &write_offset, master_fd);
-            }
         } else if (bytes_recvd == 0) {
             printf("Master closed the connection\n");
+            close(master_fd);
             break;
         } else {
             perror("recv");
-            break;
         }
     }
+    process_master_command(buffer, master_fd);
     close(master_fd);
     return NULL;
 }
@@ -249,10 +281,10 @@ void communicate_with_master() {
     // load the rdb and master's cached commands here 👇
 
     // create a separate thread to handle master's propagation
-    pthread_t process_master_command_thread_id;
-    if (pthread_create(&process_master_command_thread_id, NULL, process_master_command_thread, (void*)master_fd) != 0) {
+    pthread_t process_master_communication_thread_id;
+    if (pthread_create(&process_master_communication_thread_id, NULL, process_master_communication_thread, (void*)master_fd) != 0) {
         __debug_printf(__LINE__, __FILE__, "thread creation failed: %s\n", strerror(errno));
     }
 
-    pthread_detach(process_master_command_thread_id);
+    pthread_detach(process_master_communication_thread_id);
 }
