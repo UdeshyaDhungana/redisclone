@@ -106,6 +106,14 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
         } else {
             cmd_error_flag = true;
         }
+    } else if (!strcmp(command, "WAIT")) {
+        if (command_and_args.size == 3) {
+            rest->array = ((command_and_args.array) + 1);
+            rest->size = command_and_args.size - 1;
+            handle_wait(client_fd, rest);
+        } else {
+            cmd_error_flag = true;
+        }
     } else if (!strcmp(command, "PSYNC")) {
         if (command_and_args.size == 3) {  
             rest->array = ((command_and_args.array) + 1);
@@ -360,6 +368,31 @@ int handle_psync(int client_fd, str_array* arguments) {
         return -1;
     }
     return 0;
+}
+
+int handle_wait(int client_fd, str_array* command_and_args) {
+    /* 
+    Change this to
+    1. Start timer
+    2. Subsequently, send REPLCONF GETACK * to all the slaves (tolerance = 3s for each client)
+    3. count the number of responses
+    4. if (count > number_of_acks) return number of responses
+    5. else wait until timer is finished 
+    6. return number of responses
+    */
+    char* delay_c = command_and_args->array[1];
+    int delay = atoi(delay_c);
+    int n;
+    int_array* slaves = get_connected_client_fds();
+    if (slaves == NULL) {
+        n = 0;
+    } else {
+        n = slaves->size;
+    }
+    char* response = to_resp_integer(n);
+    usleep(1000 * delay);
+    respond_str_to_client(client_fd, response);
+    free(response);
 }
 
 /************** Config **************/

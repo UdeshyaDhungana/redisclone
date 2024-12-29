@@ -9,6 +9,7 @@
 #include <sys/epoll.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <time.h>
 #include "util.h"
 
 #define EMPTY_RDB_HEX "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
@@ -36,7 +37,7 @@ int handle_info(int client_fd, str_array*);
 
 int handle_replconf(int client_fd, str_array*);
 int handle_psync(int client_fd, str_array*);
-
+int handle_wait(int client_fd, str_array*);
 
 /* Config */
 int handle_config(int, str_array*);

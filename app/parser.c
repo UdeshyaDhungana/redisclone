@@ -130,6 +130,16 @@ char* to_resp_bulk_str(char* raw_reponse) {
     return resp_string;	
 }
 
+char* to_resp_integer(int n) {
+	char* result = malloc(((n / 10) + 1) * sizeof(char));
+	if (result == NULL) {
+		__debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
+		return NULL;
+	}
+	sprintf(result, ":%d\r\n", n);
+	return result;
+}
+
 char* to_resp_array(str_array* array) {
 	if (array == NULL) {
 		__debug_printf(__LINE__, __FILE__, "WARN: null pointer passed to to_resp_array\n");
