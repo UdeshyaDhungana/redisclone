@@ -110,10 +110,15 @@ str_array* create_str_array(const char* element) {
 	char** result_array;
 	if (element == NULL) {
 		result->array = NULL;
-		result->size = 0;
+		result->size = malloc(sizeof(unsigned int));
+		if (!result->size) {
+			free(result);
+			return NULL;
+		}
+		*(result->size) = 0;
 		return result;
 	} else {
-		result_array = malloc(sizeof(char*) * 1);
+		result_array = malloc(sizeof(char*));
 		if (result_array == NULL) {
 			__debug_printf(__LINE__, __FILE__, "malloc failed on str array\n");
 			free_str_array(result);
@@ -128,7 +133,10 @@ str_array* create_str_array(const char* element) {
 		}
 	}
 	result->array = result_array;
-	result->size = 1;
+	if (element != NULL) {
+		result->size = malloc(sizeof (unsigned int));
+	}
+	*(result->size) = 1;
 	return result;
 }
 
@@ -141,23 +149,23 @@ int append_to_str_array(str_array **array, const char* element) {
         printf("trying to append to NULL pointer\n");
         return -1;
     }
-    if ((*array)->array == NULL && (*array)->size == 0) {
+    if ((*array)->array == NULL && (*((*array)->size)) == 0) {
         *array = create_str_array(element);
         return 0;
     }
 
-    char** new_array = (char**)realloc((*array)->array, (((*array)->size) + 1) * sizeof(char *));
+    char** new_array = (char**)realloc((*array)->array, (*((*array)->size) + 1) * sizeof(char *));
     if (!new_array) {
         return -1;
     }
 
     (*array)->array = new_array;
-    (*array)->array[(*array)->size] = strdup(element);
+    (*array)->array[*((*array)->size)] = strdup(element);
 
-    if (!((*array)->array[(*array)->size])) {
+    if (!((*array)->array[*((*array)->size)])) {
         return -1;
     }
-    (*array)->size += 1;
+    *((*array)->size) += 1;
     return 0;
 }
 
@@ -168,10 +176,25 @@ void free_str_array(str_array *array) {
 	if (array->array == NULL) {
 		return;
 	}
-	for (int i = 0; i < array->size; i++) {
+	for (int i = 0; i < *(array->size); i++) {
 		free(array->array[i]);
 	}
 	free(array->array);
+	free(array->size);
+}
+
+str_array* dup_str_array(str_array *s) {
+	if (s == NULL) {
+		return NULL;
+	}
+	str_array *new = create_str_array(NULL);
+	*(new->size) = *(s->size);
+	new->array = malloc(*(s->size) * sizeof(char*));
+	for (int i = 0; i < *(s->size); i++) {
+		new->array[i] = malloc((sizeof (char)) * (strlen(s->array[i]) + 1));
+		strcpy(new->array[i], s->array[i]);
+	}
+	return new;
 }
 
 void print_str_array(str_array *s, char delim) {
@@ -179,8 +202,8 @@ void print_str_array(str_array *s, char delim) {
 		__debug_printf(__LINE__, __FILE__, "NULL\n");
 		return;
 	}
-	printf("Size: %d[ ", s->size);
-	for (int i = 0; i < s->size; i++) {
+	printf("Size: %d[ ", *(s->size));
+	for (int i = 0; i < *(s->size); i++) {
 		printf("%s,%c", s->array[i], delim);
 	}
 	printf("]\n");

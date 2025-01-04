@@ -16,7 +16,7 @@ master: $(TARGET)
 	./redis
 
 slave: $(TARGET)
-	./redis --replicaof "localhost 6379" --port 10001
+	./redis --replicaof "localhost 6379" --port 10005
 
 # Rule to build the executable by linking object files
 $(TARGET): $(OBJ)

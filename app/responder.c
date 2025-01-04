@@ -8,6 +8,10 @@ char* OK_RESPONSE = "+OK\r\n";
 char* NULL_BULK_STR = "$-1\r\n";
 char* NOT_SUPPORTED = "Command %s not supported";
 
+int acked_clients;
+pthread_mutex_t acked_clients_lock;
+
+
 /*
 client_fd -> fd to write data to
 reply -> if yes: it will write response to client_fd, else it will do so in -1
@@ -24,7 +28,7 @@ void handle_client_request(int client_fd, char command[], bool from_master) {
 			return;
 	}
 	str_array* command_and_args = command_extraction(lines, num_elements);
-	enum State_modification modify =  process_command(client_fd, *command_and_args, from_master);
+	enum State_modification modify =  process_command(client_fd, command_and_args, from_master);
 	free_str_array(command_and_args);
 	free_str_array(lines);
 	if (modify == SAVE_TO_STATE) {
@@ -37,10 +41,10 @@ void handle_client_request(int client_fd, char command[], bool from_master) {
 }
 
 
-enum State_modification process_command(int client_fd, str_array command_and_args, bool from_master) {
+enum State_modification process_command(int client_fd, str_array* command_and_args, bool from_master) {
     int client_fd_copy = client_fd;
-    char* command = command_and_args.array[0];
-    str_array *rest = malloc(sizeof(str_array));
+    char* command = command_and_args->array[0];
+    str_array *rest = create_str_array(NULL);
     bool cmd_error_flag = false;
     bool discard_command = true;
     if (from_master) {
@@ -50,74 +54,74 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
     if (!strcmp(command, "PING")) {
         handle_ping(client_fd);
     } else if (!strcmp(command, "ECHO")) {
-        if (command_and_args.size == 2) {
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if (*(command_and_args->size) == 2) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             handle_echo(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "SET")) {
-        if (command_and_args.size == 3 || command_and_args.size == 5) {
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if ( (*(command_and_args->size) == 3) || (*(command_and_args->size) == 5)) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             discard_command = (bool) handle_set(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "GET")) {
-        if (command_and_args.size == 2) {
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if (*(command_and_args->size) == 2) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             handle_get(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "CONFIG")) {
-        if (command_and_args.size >= 2) {
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if (*(command_and_args->size) >= 2) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             handle_config(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "KEYS")) {
-        if (command_and_args.size == 2) {
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if (*(command_and_args->size) == 2) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             handle_keys(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "INFO")) {
-        if (command_and_args.size >= 2) {
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if (*(command_and_args->size) >= 2) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             handle_info(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "REPLCONF")) {
-        if (command_and_args.size >= 2) {
+        if (*(command_and_args->size) >= 2) {
             client_fd = client_fd_copy;
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             handle_replconf(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "WAIT")) {
-        if (command_and_args.size == 3) {
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if (*(command_and_args->size) == 3) {
+            rest->array = ((command_and_args->array) + 1);
+           *(rest->size) = *(command_and_args->size) - 1;
             handle_wait(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
     } else if (!strcmp(command, "PSYNC")) {
-        if (command_and_args.size == 3) {  
-            rest->array = ((command_and_args.array) + 1);
-            rest->size = command_and_args.size - 1;
+        if (*(command_and_args->size) == 3) {  
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
             handle_psync(client_fd, rest);
         } else {
             cmd_error_flag = true;
@@ -142,7 +146,7 @@ enum State_modification process_command(int client_fd, str_array command_and_arg
 // for simple response
 void respond_str_to_client(int client_fd, char* buffer) {
     if (client_fd > -1) {
-        printf("Sending length %d. Content: %s\n", strlen(buffer), buffer);
+        printf("Sending length %ld. Content: %s\n", strlen(buffer), buffer);
         write(client_fd, buffer, strlen(buffer));
     }
 }
@@ -193,7 +197,7 @@ int handle_set(int client_fd, str_array* arguments) {
     }
     char* expiry_ms_str;
     char* PS = NULL;
-    if (arguments->size == 4) {
+    if (*(arguments->size) == 4) {
         PS = arguments->array[2];
     }
     long int expires_in_epoch_ms = -1;
@@ -304,6 +308,12 @@ int handle_info(int client_fd, str_array* arguments) {
     return error;
 }
 
+void set_acked_clients(int n) {
+    pthread_mutex_lock(&acked_clients_lock);
+    acked_clients = n;
+    pthread_mutex_unlock(&acked_clients_lock);
+}
+
 int handle_replconf(int client_fd, str_array* arguments) {
     printf("Handling replconf...\n");
     char* command = arguments->array[0];
@@ -322,7 +332,7 @@ int handle_replconf(int client_fd, str_array* arguments) {
         free(response);
         free_str_array(s);
     } else if (!strcmp(command, "ACK")) {
-        // pass lmao
+        set_acked_clients(acked_clients + 1);
     } else {
         handle_syntax_error(client_fd);
     }
@@ -370,18 +380,15 @@ int handle_psync(int client_fd, str_array* arguments) {
     return 0;
 }
 
-int handle_wait(int client_fd, str_array* command_and_args) {
-    /* 
-    Change this to
-    1. Start timer
-    2. Subsequently, send REPLCONF GETACK * to all the slaves (tolerance = 3s for each client)
-    3. count the number of responses
-    4. if (count > number_of_acks) return number of responses
-    5. else wait until timer is finished 
-    6. return number of responses
-    */
-    printf("Handling wait...\n");
-    char* delay_c = command_and_args->array[1];
+/* Helper for handle_wait */
+void* thread_handle_wait(void* args) {
+    thread_handle_wait_args* a = (thread_handle_wait_args*)args;
+    int client_fd = a->client_fd;
+    str_array* arguments = a->arguments;
+    /* initialize counter of acked clients to = 0*/
+    set_acked_clients(0);
+
+    char* delay_c = arguments->array[1];
     long stop = atoi(delay_c) + get_epoch_ms();
     int n;
     int_array* slaves = get_connected_client_fds();
@@ -391,13 +398,11 @@ int handle_wait(int client_fd, str_array* command_and_args) {
     append_to_str_array(&req, "GETACK");
     append_to_str_array(&req, "*");
     char* to_send = to_resp_array(req);
-    char to_recv[512];
     if (slaves == NULL) {
         n = 0;
     } else {
-        n = slaves->size;
+        n = (slaves->size);
     }
-    int responded_clients = 0;
     for (int i = 0; i < n; i++) {
         if (get_epoch_ms() > stop) {
             goto respond;
@@ -410,38 +415,32 @@ int handle_wait(int client_fd, str_array* command_and_args) {
             printf("Sent successful\n");
         }
     }
-    int_array* ignore_indexes = create_int_array(-1);
-    for (int i = 0; ignore_indexes->size > n; i = (i + 1) / n) {
-        if (index_of_element(ignore_indexes, i) > -1) {
-            continue;
-        }
-        if (get_epoch_ms() > stop) {
-            goto respond;
-        }
-        bytes_transferred = recv(slaves->array[i], to_recv, sizeof (to_recv), 0);
-        if (bytes_transferred < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                printf("was here\n");
-                continue;
-            } else {
-                __debug_printf(__LINE__, __FILE__, "recv error: %s\n", strerror(errno));
-                append_to_int_array(&ignore_indexes, i);
-                break;
-            }
-        } else {
-            responded_clients += 1;
-            append_to_int_array(&ignore_indexes, i);
-        }
-    }
 respond:
-    char* response = to_resp_integer(responded_clients);
+    /* collect the number of responded clients, you will not need locking */
     if (get_epoch_ms() < stop) {
         usleep(1000 * (stop - get_epoch_ms()));
     }
+    int responded_clients = acked_clients;
+    char* response = to_resp_integer(responded_clients);
     respond_str_to_client(client_fd, response);
     free(response);
     free(to_send);
     free_str_array(req);
+    return NULL;
+}
+
+int handle_wait(int client_fd, str_array* arguments) {
+    printf("Handling wait...\n");
+    pthread_t thread_id;
+    thread_handle_wait_args* args = malloc(sizeof(thread_handle_wait_args));
+    args->client_fd = client_fd;
+    args->arguments = dup_str_array(arguments);
+    if (pthread_create(&thread_id, NULL, thread_handle_wait, args) != 0) {
+        __debug_printf(__LINE__, __FILE__, "thread creation failed: %s\n", strerror(errno));
+        return 1;
+    }
+    pthread_detach(thread_id);
+    return 0;
 }
 
 /************** Config **************/
@@ -452,9 +451,9 @@ int handle_config(int client_fd, str_array* command_and_args) {
     int error;
 
     if (!strcmp(command, "GET")) {
-        if (command_and_args->size == 2) {
+        if (*(command_and_args->size) == 2) {
             args->array = ((command_and_args->array) + 1);
-            args->size = command_and_args->size - 1;
+            *(args->size) = *(command_and_args->size) - 1;
             handle_config_get(client_fd, args);
             error = false;
         }
@@ -531,7 +530,7 @@ void transfer_command_history(int client_fd) {
         return;
     }
     printf("Sending command history...\n");
-    for (int i = 0; i < history->size; i++) {
+    for (int i = 0; i < *(history->size); i++) {
         respond_str_to_client(client_fd, history->array[i]);
     }
 }

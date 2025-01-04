@@ -140,6 +140,10 @@ int main(int argc, char** argv) {
 	event.events = EPOLLIN;
 	epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event);
 
+	/* Threads and shit */
+	acked_clients = 0;
+	pthread_mutex_init(&acked_clients_lock, NULL);
+
 	// Event loop
 	// printf("Waiting for a client to connect on %d\n", port);
 	while (1) {

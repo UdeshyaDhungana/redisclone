@@ -108,8 +108,8 @@ syntax_failed:
     return;
 }
 
-void* process_master_communication_thread(void *arg) {
-    int master_fd = (int)arg;
+void* process_master_communication_thread(void* arg) {
+    int master_fd = *((int*)arg);
     char buffer[BUFFER_LEN];
     // right now, i'm assuming that rdb file will not be more than 4096 bytes; if so, i'll prolly have to malloc some shit
     char rdb_file[BUFFER_LEN];
@@ -160,7 +160,7 @@ void communicate_with_master() {
     Node* master_port = retrieve_from_config(MASTER_PORT);
     if (!master_host || !master_port) return;
 
-    int master_fd;
+    int* master_fd = malloc(sizeof(int));
     char master_address[16];
     struct sockaddr_in server_address;
     bool success;
@@ -168,8 +168,8 @@ void communicate_with_master() {
     char ok_response[32];
 
 
-    master_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (master_fd < 0) {
+    *master_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (*master_fd < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to create socket for master: %s\n", strerror(errno));
         return;
     }
@@ -191,14 +191,14 @@ void communicate_with_master() {
         return;
     }
     server_address.sin_port = htons(atoi(master_port->value));
-    if (connect(master_fd, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
+    if (connect(*master_fd, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
         __debug_printf(__LINE__, __FILE__, "connecting to master failed: %s\n", strerror(errno));
         return;
     }
 
     str_array* ping = create_str_array("PING");
     char* ping_request = to_resp_array(ping);
-    if (send(master_fd, ping_request, strlen(ping_request), 0) < 0) {
+    if (send(*master_fd, ping_request, strlen(ping_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send message to server: %s\n", strerror(errno));
         return;
     }
@@ -207,7 +207,7 @@ void communicate_with_master() {
 
     // receive ping from server
     memset(ping_response, 0, 32);
-    int bytes_received = recv(master_fd, ping_response, 32, 0);
+    int bytes_received = recv(*master_fd, ping_response, 32, 0);
     if (bytes_received < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to get master response: %s\n", strerror(errno));
         return;
@@ -224,7 +224,7 @@ void communicate_with_master() {
     append_to_str_array(&listening_port, "listening-port");
     append_to_str_array(&listening_port, port->value);
     char* listening_port_request = to_resp_array(listening_port);
-    if (send(master_fd, listening_port_request, strlen(listening_port_request), 0) < 0) {
+    if (send(*master_fd, listening_port_request, strlen(listening_port_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send listening-port request: %s\n", strerror(errno));
         return;
     }
@@ -233,7 +233,7 @@ void communicate_with_master() {
 
     // receive response
     memset(ok_response, 0, 32);
-    bytes_received = recv(master_fd, ok_response, 32, 0);
+    bytes_received = recv(*master_fd, ok_response, 32, 0);
     if (bytes_received < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to receive listening-port response: %s\n", strerror(errno));
         return;
@@ -248,7 +248,7 @@ void communicate_with_master() {
     append_to_str_array(&capabilities, "capa");
     append_to_str_array(&capabilities, "psync2");
     char* capabilities_request = to_resp_array(capabilities);
-    if (send(master_fd, capabilities_request, strlen(capabilities_request), 0) < 0) {
+    if (send(*master_fd, capabilities_request, strlen(capabilities_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send capabilities request: %s\n", strerror(errno));
         return;
     }
@@ -257,7 +257,7 @@ void communicate_with_master() {
     
     // ignore the response
     memset(ok_response, 0, 32);
-    bytes_received = recv(master_fd, ok_response, 32, 0);
+    bytes_received = recv(*master_fd, ok_response, 32, 0);
     if (bytes_received < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to receive capabilities response: %s\n", strerror(errno));
         return;
@@ -271,7 +271,7 @@ void communicate_with_master() {
     append_to_str_array(&psync, "?");
     append_to_str_array(&psync, "-1");
     char* psync_request = to_resp_array(psync);
-    if (send(master_fd, psync_request, strlen(psync_request), 0) < 0) {
+    if (send(*master_fd, psync_request, strlen(psync_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send psync request: %s\n", strerror(errno));
         return;
     }
@@ -282,7 +282,7 @@ void communicate_with_master() {
 
     // create a separate thread to handle master's propagation
     pthread_t process_master_communication_thread_id;
-    if (pthread_create(&process_master_communication_thread_id, NULL, process_master_communication_thread, (void*)master_fd) != 0) {
+    if (pthread_create(&process_master_communication_thread_id, NULL, process_master_communication_thread, master_fd) != 0) {
         __debug_printf(__LINE__, __FILE__, "thread creation failed: %s\n", strerror(errno));
     }
 

@@ -31,7 +31,7 @@ unsigned int copy_seconds_from_file_contents(unsigned int* expiry_s, char* file_
 
 typedef struct str_array {
 	char** array;
-	unsigned int size;
+	unsigned int *size;
 } str_array;
 
 typedef struct int_array {
@@ -48,6 +48,7 @@ str_array* create_str_array(const char* element);
 int append_to_str_array(str_array** array, const char* element);
 void free_str_array(str_array *s);
 void print_str_array(str_array *s, char delim);
+str_array* dup_str_array(str_array *s);
 
 int_array* create_int_array(int);
 int append_to_int_array(int_array**, int);

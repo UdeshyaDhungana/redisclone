@@ -36,9 +36,9 @@ str_array* split_input_lines(char* user_input) {
 		line_count++;
 		token = strtok(NULL, delim);
 	}
-	str_array *s = (str_array*)malloc(sizeof(str_array));
+	str_array *s = create_str_array(NULL);
 	s->array = lines;
-	s->size = line_count;
+	*(s->size) = line_count;
 	free(user_input_copy);
 	return s;
 }
@@ -64,7 +64,7 @@ int check_syntax(str_array *s) {
 	int declared_elements = atoi(lines[0] + 1);
 	int actual_elements = 0;
 	int i = 1;
-    for (;i < (s->size - 1); i += 2) {
+    for (;i < (*(s->size) - 1); i += 2) {
         // Parse length from the `$<length>` line
         if (lines[i][0] != '$') {
             fprintf(stderr, "Syntax error: Expected '$' at line %d.\n", i + 1);
@@ -158,7 +158,7 @@ char* to_resp_array(str_array* array) {
 	char* runner;
 
 	// response length calculation for malloc
-	for (int i = 0; i < array->size ; i++) {
+	for (int i = 0; i < *(array->size) ; i++) {
 		runner = array->array[i];
 		arr_len += 1;
 		response_length += strlen(runner);					// eg. $3\r\ndir\r\n [this line accounts for dir]
@@ -179,7 +179,7 @@ char* to_resp_array(str_array* array) {
 	strcat(response, "*");
 	strcat(response, arr_len_str);
 	strcat(response, "\r\n");
-	for (int i = 0; i < array->size ; i++) {
+	for (int i = 0; i < *(array->size) ; i++) {
 		runner = array->array[i];
 		strcat(response, "$");
 		entry_len = strlen(runner);
