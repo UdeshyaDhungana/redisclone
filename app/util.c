@@ -218,6 +218,18 @@ int append_to_int_array(int_array** arr, int element) {
 	return 0;
 }
 
+ssize_t index_of_element(int_array* arr, int element) {
+	if (arr == NULL) {
+		return -1;
+	}
+	for (int i = 0; i < arr->size; i++) {
+		if (element == arr->array[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
 void free_int_array(int_array* arr) {
 	if (arr == NULL) {
 		return;
@@ -340,4 +352,10 @@ void hex_to_bytes(const char *hex_str, unsigned char **out_bytes, size_t *out_le
     for (; i < *out_len; i++) {
         sscanf(&hex_str[i * 2], "%2hhx", &(*out_bytes)[i]); // Read 2 hex chars as a byte
     }
+}
+
+// makes a fd non blocking
+void set_non_blocking(int sockfd) {
+	int flags = fcntl(sockfd, F_GETFL, 0);
+	fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 }

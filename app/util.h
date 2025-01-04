@@ -51,6 +51,7 @@ void print_str_array(str_array *s, char delim);
 
 int_array* create_int_array(int);
 int append_to_int_array(int_array**, int);
+ssize_t index_of_element(int_array* arr, int element);
 void free_int_array(int_array*);
 
 
@@ -65,5 +66,7 @@ file_content* read_entire_file(const char*);
 void free_file_content(file_content*);
 
 void hex_to_bytes(const char *hex_str, unsigned char **out_bytes, size_t *out_len);
+
+void set_non_blocking(int);
 
 #endif

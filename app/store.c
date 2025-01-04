@@ -448,6 +448,7 @@ str_array* get_command_history() {
 }
 
 bool add_to_client_fds(int fd) {
+    set_non_blocking(fd);
     int res = append_to_int_array(&(GS.client_fds), fd);
     if (res == 0) {
         return true;

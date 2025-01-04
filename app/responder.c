@@ -380,19 +380,68 @@ int handle_wait(int client_fd, str_array* command_and_args) {
     5. else wait until timer is finished 
     6. return number of responses
     */
+    printf("Handling wait...\n");
     char* delay_c = command_and_args->array[1];
-    int delay = atoi(delay_c);
+    long stop = atoi(delay_c) + get_epoch_ms();
     int n;
     int_array* slaves = get_connected_client_fds();
+    ssize_t bytes_transferred;
+    /* send this*/
+    str_array *req = create_str_array("REPLCONF");
+    append_to_str_array(&req, "GETACK");
+    append_to_str_array(&req, "*");
+    char* to_send = to_resp_array(req);
+    char to_recv[512];
     if (slaves == NULL) {
         n = 0;
     } else {
         n = slaves->size;
     }
-    char* response = to_resp_integer(n);
-    usleep(1000 * delay);
+    int responded_clients = 0;
+    for (int i = 0; i < n; i++) {
+        if (get_epoch_ms() > stop) {
+            goto respond;
+        }
+        bytes_transferred = send(slaves->array[i], to_send, strlen(to_send), 0);
+        if (bytes_transferred < 0) {
+            __debug_printf(__LINE__, __FILE__, "send: %s", strerror(errno));
+            continue;
+        } else {
+            printf("Sent successful\n");
+        }
+    }
+    int_array* ignore_indexes = create_int_array(-1);
+    for (int i = 0; ignore_indexes->size > n; i = (i + 1) / n) {
+        if (index_of_element(ignore_indexes, i) > -1) {
+            continue;
+        }
+        if (get_epoch_ms() > stop) {
+            goto respond;
+        }
+        bytes_transferred = recv(slaves->array[i], to_recv, sizeof (to_recv), 0);
+        if (bytes_transferred < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                printf("was here\n");
+                continue;
+            } else {
+                __debug_printf(__LINE__, __FILE__, "recv error: %s\n", strerror(errno));
+                append_to_int_array(&ignore_indexes, i);
+                break;
+            }
+        } else {
+            responded_clients += 1;
+            append_to_int_array(&ignore_indexes, i);
+        }
+    }
+respond:
+    char* response = to_resp_integer(responded_clients);
+    if (get_epoch_ms() < stop) {
+        usleep(1000 * (stop - get_epoch_ms()));
+    }
     respond_str_to_client(client_fd, response);
     free(response);
+    free(to_send);
+    free_str_array(req);
 }
 
 /************** Config **************/

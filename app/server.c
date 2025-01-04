@@ -184,12 +184,6 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-
-void set_non_blocking(int sockfd) {
-	int flags = fcntl(sockfd, F_GETFL, 0);
-	fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
-}
-
 void set_reuse(int sockfd) {
 	int reuse = 1;
 	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
