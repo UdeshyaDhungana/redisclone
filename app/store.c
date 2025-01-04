@@ -54,6 +54,7 @@ void __debug_print_metadata() {
 /* at any point during initializing db, if we come across any errors in the file, we start with null config */
 /* this function is *very very* poorly written. I need to do a project on string manipulation and shit to improve my skills */
 int init_db(ConfigOptions* c) {
+    pthread_mutex_init(&db_lock, NULL);
     unsigned int num_keys = 0;
     if (c == NULL || c->dir == NULL || c->dbfilename == NULL) {
         __debug_printf( __LINE__, __FILE__, "empty config\n");
@@ -396,7 +397,10 @@ Node* retrieve_from_store(StoreType st, char* key) {
 }
 
 bool save_to_db(char* key, char* value, long int expiry) {
-    return save_to_store(STORETYPE_DB, key, value, expiry);
+    pthread_mutex_lock(&db_lock);
+    bool result = save_to_store(STORETYPE_DB, key, value, expiry);
+    pthread_mutex_unlock(&db_lock);
+    return result;
 }
 
 Node* retrieve_from_db(char* key) {

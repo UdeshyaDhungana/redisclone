@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #include "util.h"
 
 #define C_DIR  "dir"
@@ -121,6 +122,7 @@ bool save_to_store(StoreType, char*, char*, long int);
 Node* retrieve_from_store(StoreType, char* key);
 
 // db
+extern pthread_mutex_t db_lock;
 bool save_to_db(char*, char*, long int);
 Node* retrieve_from_db(char *key);
 
