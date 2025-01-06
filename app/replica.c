@@ -38,74 +38,91 @@ ssize_t parse_rdb_file(char* buffer, char* rdb_file, size_t write_offset) {
     return (size_end + 2 + file_size - buffer);
 }
 
-/* this sphagetti code is the reason why i want to do a json parsor and get better at parsing */
-void process_master_command(char* buffer, int master_fd) {
-    int arr_size;
-    char arr_size_str[16];
-    int command_size;
-    char* command, *arr_len_start, *arr_len_end, *delimiter;
+// should return true if can parse and syntax also true
+// should also fix the buffer content and remove the command from the buffer
+char* parse_command(char* buffer) {
+    // parse
     int i;
-    ssize_t remaining_length, command_length;
-    ssize_t recv_length = strlen(buffer);
-    ssize_t write_offset = 0;
+    int array_size;
+    size_t command_size;
+    char* command, *array_len_start, *array_len_end, *delimiter;
+    char array_size_str[16];
     str_array* lines;
-    if (recv_length == 0) goto recv_from_master;
-    do {
-        while (1) {
-            write_offset += recv_length;
-            if (buffer[0] != '*' && recv_length > 0) {
-                goto loop_end;
-            }
-            arr_len_start = buffer + 1;
-            arr_len_end = strstr(buffer, "\r\n");
-            for (i = 0; arr_len_start + i != arr_len_end; i++) {
-                arr_size_str[i] = arr_len_start[i];
-            }
-            arr_size_str[i] = 0;
-            arr_size = atoi(arr_size_str);
-            
-            delimiter = buffer;
-            for (i = 0; i < (1 + 2 * arr_size); i++) {
-                delimiter = strstr(delimiter, "\r\n");
-                if (delimiter == NULL) {
-                    goto recv_from_master;
-                }
-                delimiter += 2;
-            }
-            command_size = (delimiter - buffer) / (sizeof(char));
+    size_t remaining_length;
 
-            command = malloc((command_size + 1)* sizeof(char));
-            memcpy(command, buffer, command_size);
-            command[command_size] = 0;
+    array_len_start = buffer + 1;
+    array_len_end = strstr(buffer, "\r\n");
+    if (array_len_end == NULL) {
+        return NULL;
+    }
+    for (i = 0; array_len_start + i != array_len_end; i++) {
+        array_size_str[i] = array_len_start[i];
+    }
+    array_size_str[i] = 0;
+    array_size = atoi(array_size_str);
 
-            lines = split_input_lines(command);
-            if (!check_syntax(lines)) {
-                free(command);
-                free_str_array(lines);
-                goto syntax_failed;
-            }
-            handle_client_request(master_fd, command, true);
-            command_length = strlen(command);
-            add_replconf(command_length);
-            free(command);
-            free_str_array(lines);
-            remaining_length = strlen(delimiter);
-            memmove(buffer, delimiter, remaining_length);
-            memset(buffer + remaining_length, 0, command_size);
-            write_offset -= command_length;
-            if (strlen(buffer) == 0) break;
+    delimiter = buffer;
+    for (i = 0; i < (1 + 2 * array_size); i++) {
+        delimiter = strstr(delimiter, "\r\n");
+        if (delimiter == NULL) {
+            return NULL;
         }
-recv_from_master:
-        recv_length = recv(master_fd, buffer + write_offset, BUFFER_LEN - 1 - write_offset, 0);
-    } while (recv_length > 0);
-    __debug_printf(__LINE__, __FILE__, "master broke connection :(\n");
-    return;
-loop_end:
-    __debug_printf(__LINE__, __FILE__, "buffer does not start with *, invariant not maintained\n");
-    return;
-syntax_failed:
-    __debug_printf(__LINE__, __FILE__, "syntax check failed\n");
-    return;
+        delimiter += 2;
+    }
+
+    command_size = (delimiter - buffer) / (sizeof(char));
+    command = malloc((command_size + 1) * sizeof(char));
+    memcpy(command, buffer, command_size);
+    command[command_size] = 0;
+
+    lines = split_input_lines(command);
+    printf("Command is: %s\n", command);
+    if (!check_syntax(lines)) {
+        free(command);
+        free_str_array(lines);
+        return NULL;
+    }
+    // fix the buffer
+    remaining_length = strlen(delimiter);
+    memmove(buffer, delimiter, remaining_length);
+    memset(buffer + remaining_length, 0, command_size);
+    // return command
+    free_str_array(lines);
+    return command;
+}
+
+void execute_master_command(char* command, int master_fd) {
+    handle_client_request(master_fd, command, true);
+    add_replconf(strlen(command));
+} 
+
+void process_master_command(char* buffer, int master_fd) {
+    ssize_t recv_length = strlen(buffer);
+    ssize_t write_offset = strlen(buffer);
+    char* command;
+    bool should_receive = (strlen(buffer) == 0);
+    while (true) {
+        if (should_receive) {
+            recv_length = recv(master_fd, buffer + write_offset, BUFFER_LEN - 1 - write_offset, 0);
+            if (recv_length < 1) {
+                break;
+            }
+        }
+        should_receive = true;
+        command = parse_command(buffer);
+        while (command != NULL) {
+            execute_master_command(command, master_fd);
+            free(command);
+            command = parse_command(buffer);
+        }
+        write_offset = strlen(buffer);
+    }
+    if (recv_length == -1) {
+        __debug_printf(__LINE__, __FILE__, "recv: %s\n", strerror(errno));
+    } else {
+        __debug_printf(__LINE__, __FILE__, "master closed connection :(\n");
+    }
+
 }
 
 void* process_master_communication_thread(void* arg) {

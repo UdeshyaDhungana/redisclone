@@ -13,13 +13,11 @@ else
     exit 1;
 fi
 
-if [ -z "$1" ]; then
-    echo "Enter commit message"
-    exit 1
-else
-    # copy
-    rsync -ravPz app "$RSYNC_PATH"
 
+rsync -ravPz app "$RSYNC_PATH"
+if [ -z "$1" ]; then
+    exit 0;
+else
     # commit and push
     cd "$CD_PATH"
     git add .

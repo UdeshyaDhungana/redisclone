@@ -8,6 +8,9 @@ Keys "*"
 GET (with and without expiry)
 */
 
+pthread_mutex_t db_lock;
+
+
 GlobalStore GS = {
     .DB = NULL,
     .config = NULL,

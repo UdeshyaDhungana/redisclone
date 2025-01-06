@@ -360,15 +360,22 @@ int handle_psync(int client_fd, str_array* arguments) {
             free(response);
             free(raw_response);
             transfer_rdb_file(client_fd);
-            // i am disabling this for now; in case we need it, i'll bring it back
-            // disabling this makes parsing replica easy
-            // transfer_command_history(client_fd);
             success = add_to_client_fds(client_fd);
             if (!success) {
                 __debug_printf(__LINE__, __FILE__, "failed to save to client fds\n");
             } else {
                 printf("FD %d is saved to replicas\n", client_fd);
             }
+
+            // /* Only for tests; remove after */
+            // char* buffer = "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$1\r\n1\r\n";
+            // char recv_buf[1024];
+            // send(client_fd, buffer, strlen(buffer), 0);
+            // recv(client_fd, recv_buf, 512, 0);
+
+            // char* buffer2 = "*3\r\n$3\r\nSET\r\n$3\r\nbar\r\n$1\r\n1\r\n*3\r\n$3\r\nSET\r\n$3\r\nbaz\r\n$1\r\n1\r\n";
+            // send(client_fd, buffer2, strlen(buffer2), 0);
+            // recv(client_fd, recv_buf, 512, 0);
         }
     } else {
         error = true;
@@ -417,7 +424,7 @@ void* thread_handle_wait(void* args) {
     }
 respond:
     /* collect the number of responded clients, you will not need locking */
-    if (get_epoch_ms() < stop) {
+    if (get_epoch_ms() < stop && n > 0) {
         usleep(1000 * (stop - get_epoch_ms()));
     }
     int responded_clients = acked_clients;
