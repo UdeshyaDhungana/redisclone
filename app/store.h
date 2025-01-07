@@ -74,6 +74,19 @@ typedef struct Node {
     struct Node* next;
 } Node;
 
+typedef struct StreamNode {
+    char* key;
+    char* value;
+    char* ID;
+    struct StreamNode* next;
+} StreamNode;
+
+typedef struct StreamHead {
+    char* stream_name;
+    struct StreamNode* node_ll;
+    struct StreamHead* next;
+} StreamHead;
+
 typedef struct DB_Info {
     int index;
     int num_key_val;
@@ -82,6 +95,7 @@ typedef struct DB_Info {
 
 typedef struct GlobalStore {
     Node* DB;
+    StreamHead* streamDB;
     Node* config;
     Node* metadata;
     DB_Info db_info;
@@ -95,8 +109,8 @@ void __debug_print_DB();
 void __debug_print_config();
 void __debug_print_metadata();
 void __debug_print_store(Node* );
-
-// 
+void __debug_print_stream_node(StreamNode*);
+void __debug_print_stream_DB();
 
 // load database from file
 int init_db(ConfigOptions *);
@@ -116,6 +130,14 @@ void free_config(ConfigOptions*);
 // implementing the database as linked list right now; can be optimized later
 Node* make_node(char* , char*, long int);
 void delete_node(Node*);
+
+// stream data structures
+StreamNode* make_stream_node(char* ID, char* key, char* value);
+bool append_to_stream(StreamNode*, char*, char*, char*);
+void free_node_ll(StreamNode *n);
+char* xadd_db(char* stream_name, char* ID, char* key, char* value);
+
+StreamHead* retrieve_stream(char* stream_name);
 
 // external interfaces as store
 bool save_to_store(StoreType, char*, char*, long int);

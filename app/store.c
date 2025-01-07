@@ -51,6 +51,32 @@ void __debug_print_config() {
 void __debug_print_metadata() {
     __debug_print_Node(GS.metadata);
 }
+
+void __debug_print_stream_node(StreamNode* node) {
+    StreamNode* runner = node;
+    while (runner != NULL) {
+        printf("ID: %s\n", runner->ID);
+        printf("Key: %s\n", runner->key);
+        printf("Value: %s\n", runner->value);
+        printf("--------------\n");
+        runner = runner->next;
+    }
+}
+
+void __debug_print_stream_DB() {
+    StreamHead* head_runner;
+    head_runner = GS.streamDB;
+    if (!head_runner) {
+        printf("StreamDB is empty\n");
+        return;
+    }
+    while (head_runner != NULL) {
+        printf("=====================\n");
+        printf("Stream: [%s]\t", head_runner->stream_name);
+        __debug_print_stream_node(head_runner->node_ll);
+        head_runner = head_runner->next;
+    }
+}
 /* end debug */
 
 
@@ -322,6 +348,105 @@ void delete_node(Node* n) {
     Node* to_delete = runner->next;
     runner->next = to_delete->next;
     free_node(to_delete);
+}
+
+StreamNode* make_stream_node(char* ID, char* key, char* value) {
+    StreamNode* result = malloc(sizeof(StreamNode));
+    if (!result) {
+        __debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
+        return NULL;
+    }
+    result->next = NULL;
+    result->ID = strdup(ID);
+    result->key = strdup(key);
+    result->value = strdup(value);
+    return result;
+}
+
+bool append_to_stream(StreamNode* target, char* ID, char* key, char* value) {
+    if (!target) {
+        return false;
+    }
+    StreamNode* runner = target;
+    while (runner->next != NULL) {
+        runner = runner->next;
+    }
+    StreamNode* new_node = malloc(sizeof(StreamNode));
+    if (!new_node) {
+        __debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
+        return false;
+    }
+    new_node->next = NULL;
+    new_node->ID = strdup(ID);
+    new_node->key = strdup(key);
+    new_node->value = strdup(value);
+    runner->next = new_node;
+    return true;
+}
+
+// only frees a single node
+void free_node_ll(StreamNode* n) {
+    free(n->ID);
+    free(n->key);
+    free(n->value);
+    free(n);
+}
+
+char* xadd_db(char* stream_name, char* ID, char* key, char* value) {
+    if (GS.streamDB == NULL) {
+        StreamNode *s = make_stream_node(ID, key, value);
+        if (!s) {
+            __debug_printf(__LINE__, __FILE__, "make_stream_node failed\n");
+            free(s);
+            return NULL;
+        }
+        GS.streamDB = malloc(sizeof(StreamHead));
+        GS.streamDB->next = NULL;
+        GS.streamDB->stream_name = strdup(stream_name);
+        GS.streamDB->node_ll = make_stream_node(ID, key, value);
+    } else {
+        bool success;
+        StreamHead* runner = GS.streamDB;
+        StreamNode* new_node_ll;
+        while (runner->next != NULL) {
+            runner = runner->next;
+        }
+        if (!strcmp(stream_name, runner->stream_name)) {
+            // insert to this streamhead
+            success = append_to_stream(runner->node_ll, ID, key, value);
+            if (!success) {
+                __debug_printf(__LINE__, __FILE__, "append_to_stream failed\n");
+                return NULL;
+            }
+        } else {
+            // create a new stream head
+            new_node_ll = make_stream_node(ID, key, value);
+            if (!new_node_ll) {
+                __debug_printf(__LINE__, __FILE__, "make_stream_node failed\n");
+                return NULL;
+            }
+            StreamHead* new_head = malloc(sizeof(StreamHead));
+            if (!new_head) {
+                __debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
+                free_node_ll(new_node_ll);
+            }
+            new_head->next = NULL;
+            runner->next = new_head;
+            new_head->stream_name = strdup(stream_name);
+            new_head->node_ll = new_node_ll;
+        }
+    }
+}
+
+StreamHead* retrieve_stream(char* stream_name) {
+    StreamHead* runner = GS.streamDB;
+    while (runner != NULL) {
+        if (!strcmp(stream_name, runner->stream_name)) {
+            return runner;
+        }
+        runner = runner->next;
+    }
+    return NULL;
 }
 
 bool save_to_store(StoreType st, char* key, char* value, long int expiry_ms) {

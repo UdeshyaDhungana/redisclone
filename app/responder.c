@@ -9,6 +9,7 @@ char* NULL_BULK_STR = "$-1\r\n";
 char* NOT_SUPPORTED = "Command %s not supported";
 char* NONE_RESP_SIMPLE_STRING = "+none\r\n";
 char* STRING_TYPE_SIMPLE_STRING = "+string\r\n";
+char* STREAM_TYPE_SIMPLE_STRING = "+stream\r\n";
 
 int acked_clients;
 pthread_mutex_t acked_clients_lock;
@@ -136,7 +137,16 @@ enum State_modification process_command(int client_fd, str_array* command_and_ar
         } else {
             cmd_error_flag = true;
         }
-    } else {
+    } else if (!strcmp(command, "XADD")) {
+        if (*(command_and_args->size) % 2 == 1) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
+            handle_xadd(client_fd, rest);
+        } else {
+            cmd_error_flag = true;
+        }
+    }
+     else {
         cmd_error_flag = true;
     }
     if (cmd_error_flag) {
@@ -459,12 +469,34 @@ int handle_wait(int client_fd, str_array* arguments) {
 
 int handle_type(int client_fd, str_array* arguments) {
     printf("Handling type...\n");
-    Node* node = retrieve_from_db(arguments->array[0]);
-    if (!node) {
-        respond_str_to_client(client_fd, NONE_RESP_SIMPLE_STRING);
-    } else {
+    char* key = arguments->array[0];
+    Node* node = retrieve_from_db(key);
+    if (node) {
         respond_str_to_client(client_fd, STRING_TYPE_SIMPLE_STRING);
+        return 0;
     }
+    StreamHead* stream = retrieve_stream(key);
+    if (stream) {
+        respond_str_to_client(client_fd, STREAM_TYPE_SIMPLE_STRING);
+        return 0;
+    }
+    respond_str_to_client(client_fd, NONE_RESP_SIMPLE_STRING);
+}
+
+int handle_xadd(int client_fd, str_array* arguments) {
+    printf("Handling xadd...\n");
+    char* stream_name = arguments->array[0];
+    char* stream_id = arguments->array[1];
+    char* key;
+    char* value;
+    for (int i = 2; i < *(arguments->size); i += 2) {
+        key = arguments->array[i];
+        value = arguments->array[i+1];
+        xadd_db(stream_name, stream_id, key, value);
+    }
+    char* response = to_resp_bulk_str(stream_id);
+    respond_str_to_client(client_fd, response);
+    free(response);
     return 0;
 }
 
