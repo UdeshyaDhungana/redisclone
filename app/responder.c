@@ -146,7 +146,6 @@ enum State_modification process_command(int client_fd, str_array* command_and_ar
 // for simple response
 void respond_str_to_client(int client_fd, char* buffer) {
     if (client_fd > -1) {
-        printf("Sending length %ld. Content: %s\n", strlen(buffer), buffer);
         write(client_fd, buffer, strlen(buffer));
     }
 }
@@ -393,13 +392,12 @@ void* thread_handle_wait(void* args) {
     int client_fd = a->client_fd;
     str_array* arguments = a->arguments;
     /* initialize counter of acked clients to = 0*/
-    set_acked_clients(0);
-
     char* delay_c = arguments->array[1];
     long stop = atoi(delay_c) + get_epoch_ms();
     int n;
     int_array* slaves = get_connected_client_fds();
     ssize_t bytes_transferred;
+    int responded_clients;
     /* send this*/
     str_array *req = create_str_array("REPLCONF");
     append_to_str_array(&req, "GETACK");
@@ -410,24 +408,33 @@ void* thread_handle_wait(void* args) {
     } else {
         n = (slaves->size);
     }
-    for (int i = 0; i < n; i++) {
-        if (get_epoch_ms() > stop) {
-            goto respond;
+    str_array* history = get_command_history();
+    if (history && history->size > 0) {
+        set_acked_clients(0);
+        for (int i = 0; i < n; i++) {
+            if (get_epoch_ms() > stop) {
+                break;
+            }
+            bytes_transferred = send(slaves->array[i], to_send, strlen(to_send), 0);
+            if (bytes_transferred < 0) {
+                __debug_printf(__LINE__, __FILE__, "send: %s", strerror(errno));
+                continue;
+            } else {
+                printf("Replconf sent to FD %d successful\n", slaves->array[i]);
+            }
         }
-        bytes_transferred = send(slaves->array[i], to_send, strlen(to_send), 0);
-        if (bytes_transferred < 0) {
-            __debug_printf(__LINE__, __FILE__, "send: %s", strerror(errno));
-            continue;
+        /* collect the number of responded clients, you will not need locking */
+        if (get_epoch_ms() < stop && n > 0) {
+            usleep(1000 * (stop - get_epoch_ms()));
+        }
+        responded_clients = acked_clients;
+    } else {
+        if (slaves) {
+            responded_clients = slaves->size;
         } else {
-            printf("Sent successful\n");
+            responded_clients = 0;
         }
     }
-respond:
-    /* collect the number of responded clients, you will not need locking */
-    if (get_epoch_ms() < stop && n > 0) {
-        usleep(1000 * (stop - get_epoch_ms()));
-    }
-    int responded_clients = acked_clients;
     char* response = to_resp_integer(responded_clients);
     respond_str_to_client(client_fd, response);
     free(response);

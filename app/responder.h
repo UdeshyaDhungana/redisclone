@@ -44,7 +44,7 @@ typedef struct thread_handle_wait_args {
     str_array* arguments;
 } thread_handle_wait_args;
 
-
+// number of clients that have acknowledged replconf getack *
 extern int acked_clients;
 extern pthread_mutex_t acked_clients_lock;
 void set_acked_clients(int);

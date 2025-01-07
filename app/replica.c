@@ -160,11 +160,12 @@ void* process_master_communication_thread(void* arg) {
                 } else continue;
             } 
         } else if (bytes_recvd == 0) {
-            printf("Master closed the connection\n");
+            __debug_printf(__LINE__, __FILE__, "master closed connection\n");
             close(master_fd);
             break;
         } else {
-            perror("recv");
+            __debug_printf(__LINE__, __FILE__, "recv failed: %s\n", strerror(errno));
+            break;
         }
     }
     process_master_command(buffer, master_fd);
@@ -172,6 +173,7 @@ void* process_master_communication_thread(void* arg) {
     return NULL;
 }
 
+// using goto is really bad
 void communicate_with_master() {
     Node* master_host = retrieve_from_config(MASTER_HOST);
     Node* master_port = retrieve_from_config(MASTER_PORT);
@@ -183,12 +185,13 @@ void communicate_with_master() {
     bool success;
     char ping_response[32];
     char ok_response[32];
+    bool free_master = true;
 
 
     *master_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (*master_fd < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to create socket for master: %s\n", strerror(errno));
-        return;
+        goto free_master_fd;
     }
 
     server_address.sin_family = AF_INET;
@@ -197,7 +200,8 @@ void communicate_with_master() {
         success = hostname_to_ip(master_host->value, master_address);
         if (!success) {
             __debug_printf(__LINE__, __FILE__, "could not determine master address: %s", strerror(errno));
-            return;
+            close(*master_fd);
+            goto free_master_fd;
         }
     } else {
         strcpy(master_address, master_host->value);
@@ -205,32 +209,36 @@ void communicate_with_master() {
     // inet_pton
     if (inet_pton(AF_INET, master_address, &server_address.sin_addr) <= 0) {
         __debug_printf(__LINE__, __FILE__, "could not convert ip address to number: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_master_fd;
     }
     server_address.sin_port = htons(atoi(master_port->value));
     if (connect(*master_fd, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
         __debug_printf(__LINE__, __FILE__, "connecting to master failed: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_master_fd;
     }
 
     str_array* ping = create_str_array("PING");
     char* ping_request = to_resp_array(ping);
     if (send(*master_fd, ping_request, strlen(ping_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send message to server: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_ping;
     }
-    free(ping_request);
-    free_str_array(ping);
+
 
     // receive ping from server
     memset(ping_response, 0, 32);
     int bytes_received = recv(*master_fd, ping_response, 32, 0);
     if (bytes_received < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to get master response: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_ping;
     } else if (bytes_received == 0) {
         __debug_printf(__LINE__, __FILE__, "serve unexpectedly closed connection: %s\n");
-        return;
+        close(*master_fd);
+        goto free_ping;
     }
 
 
@@ -243,20 +251,22 @@ void communicate_with_master() {
     char* listening_port_request = to_resp_array(listening_port);
     if (send(*master_fd, listening_port_request, strlen(listening_port_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send listening-port request: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_listening_port;
     }
-    free_str_array(listening_port);
-    free(listening_port_request);
+
 
     // receive response
     memset(ok_response, 0, 32);
     bytes_received = recv(*master_fd, ok_response, 32, 0);
     if (bytes_received < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to receive listening-port response: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_listening_port;
     } if (bytes_received == 0) {
         __debug_printf(__LINE__, __FILE__, "serve unexpectedly closed connection: %s\n");
-        return;
+        close(*master_fd);
+        goto free_listening_port;
     }
 
     // ignore the response
@@ -267,20 +277,22 @@ void communicate_with_master() {
     char* capabilities_request = to_resp_array(capabilities);
     if (send(*master_fd, capabilities_request, strlen(capabilities_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send capabilities request: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_capabilities;
     }
-    free_str_array(capabilities);
-    free(capabilities_request);
+
     
     // ignore the response
     memset(ok_response, 0, 32);
     bytes_received = recv(*master_fd, ok_response, 32, 0);
     if (bytes_received < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to receive capabilities response: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_capabilities;
     } if (bytes_received == 0) {
         __debug_printf(__LINE__, __FILE__, "serve unexpectedly closed connection:\n");
-        return;
+        close(*master_fd);
+        goto free_capabilities;
     }
 
     // again ignore the response and send "PSYNC ? -1"
@@ -290,18 +302,36 @@ void communicate_with_master() {
     char* psync_request = to_resp_array(psync);
     if (send(*master_fd, psync_request, strlen(psync_request), 0) < 0) {
         __debug_printf(__LINE__, __FILE__, "failed to send psync request: %s\n", strerror(errno));
-        return;
+        close(*master_fd);
+        goto free_psync;
     }
-    free_str_array(psync);
-    free(psync_request);
+
 
     // load the rdb and master's cached commands here 👇
 
     // create a separate thread to handle master's propagation
     pthread_t process_master_communication_thread_id;
+    free_master = false;
     if (pthread_create(&process_master_communication_thread_id, NULL, process_master_communication_thread, master_fd) != 0) {
         __debug_printf(__LINE__, __FILE__, "thread creation failed: %s\n", strerror(errno));
     }
 
     pthread_detach(process_master_communication_thread_id);
+
+free_psync:
+    free_str_array(psync);
+    free(psync_request);
+free_capabilities:
+    free_str_array(capabilities);
+    free(capabilities_request);
+free_listening_port:
+    free_str_array(listening_port);
+    free(listening_port_request);
+free_ping:
+    free(ping_request);
+    free_str_array(ping);
+free_master_fd:
+    if (free_master) {
+        free(master_fd);
+    }
 }
