@@ -7,6 +7,8 @@ char* SYNTAX_ERROR = "-ERR syntax error";
 char* OK_RESPONSE = "+OK\r\n";
 char* NULL_BULK_STR = "$-1\r\n";
 char* NOT_SUPPORTED = "Command %s not supported";
+char* NONE_RESP_SIMPLE_STRING = "+none\r\n";
+char* STRING_TYPE_SIMPLE_STRING = "+string\r\n";
 
 int acked_clients;
 pthread_mutex_t acked_clients_lock;
@@ -123,6 +125,14 @@ enum State_modification process_command(int client_fd, str_array* command_and_ar
             rest->array = ((command_and_args->array) + 1);
             *(rest->size) = *(command_and_args->size) - 1;
             handle_psync(client_fd, rest);
+        } else {
+            cmd_error_flag = true;
+        }
+    } else if (!strcmp(command, "TYPE")) {
+        if (*(command_and_args->size) == 2) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
+            handle_type(client_fd, rest);
         } else {
             cmd_error_flag = true;
         }
@@ -365,16 +375,6 @@ int handle_psync(int client_fd, str_array* arguments) {
             } else {
                 printf("FD %d is saved to replicas\n", client_fd);
             }
-
-            // /* Only for tests; remove after */
-            // char* buffer = "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$1\r\n1\r\n";
-            // char recv_buf[1024];
-            // send(client_fd, buffer, strlen(buffer), 0);
-            // recv(client_fd, recv_buf, 512, 0);
-
-            // char* buffer2 = "*3\r\n$3\r\nSET\r\n$3\r\nbar\r\n$1\r\n1\r\n*3\r\n$3\r\nSET\r\n$3\r\nbaz\r\n$1\r\n1\r\n";
-            // send(client_fd, buffer2, strlen(buffer2), 0);
-            // recv(client_fd, recv_buf, 512, 0);
         }
     } else {
         error = true;
@@ -454,6 +454,17 @@ int handle_wait(int client_fd, str_array* arguments) {
         return 1;
     }
     pthread_detach(thread_id);
+    return 0;
+}
+
+int handle_type(int client_fd, str_array* arguments) {
+    printf("Handling type...\n");
+    Node* node = retrieve_from_db(arguments->array[0]);
+    if (!node) {
+        respond_str_to_client(client_fd, NONE_RESP_SIMPLE_STRING);
+    } else {
+        respond_str_to_client(client_fd, STRING_TYPE_SIMPLE_STRING);
+    }
     return 0;
 }
 
