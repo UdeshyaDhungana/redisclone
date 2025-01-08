@@ -23,6 +23,22 @@ int split_string(char* source, char delim, char** left, char** right) {
 	return 0;
 }
 
+// this program will be 
+int get_timestamp_from_entry_id(char* entry_id) {
+	int result;
+	char* entry_id_dup = strdup(entry_id);
+	char* dash = strstr(entry_id_dup, "-");
+	*dash = '\0';
+	result = atoi(entry_id_dup);
+	free(entry_id_dup);
+	return result;
+}
+
+int get_sequence_number_from_entry_id(char* entry_id) {
+	char* dash = strstr(entry_id, "-");
+	return atoi(dash + 1);
+}
+
 void free_ptr_to_char_ptr(char** arg) {
     for (int i = 0; arg[i] != NULL; i++) {
 		free(arg[i]);

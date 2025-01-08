@@ -11,6 +11,9 @@ char* NONE_RESP_SIMPLE_STRING = "+none\r\n";
 char* STRING_TYPE_SIMPLE_STRING = "+string\r\n";
 char* STREAM_TYPE_SIMPLE_STRING = "+stream\r\n";
 
+char* ID_SMALLER_EQUAL_ERROR = "-ERR The ID specified in XADD is equal or smaller than the target stream top item\r\n";
+char* ID_BELOW_MINIMUM_ERROR = "-ERR The ID specified in XADD must be greater than 0-0\r\n";
+
 int acked_clients;
 pthread_mutex_t acked_clients_lock;
 
@@ -485,6 +488,7 @@ int handle_type(int client_fd, str_array* arguments) {
 
 int handle_xadd(int client_fd, str_array* arguments) {
     printf("Handling xadd...\n");
+    XADD_ERR xadd_db_response;
     char* stream_name = arguments->array[0];
     char* stream_id = arguments->array[1];
     char* key;
@@ -492,7 +496,19 @@ int handle_xadd(int client_fd, str_array* arguments) {
     for (int i = 2; i < *(arguments->size); i += 2) {
         key = arguments->array[i];
         value = arguments->array[i+1];
-        xadd_db(stream_name, stream_id, key, value);
+        xadd_db_response = xadd_db(stream_name, stream_id, key, value);
+        if (xadd_db_response != NONE) {
+            if (xadd_db_response == SYSTEM_ERROR) {
+                __debug_printf(__LINE__, __FILE__, "Should not have arrived here\n");
+                // dummy
+                respond_str_to_client(client_fd, SYNTAX_ERROR);
+            } else if (xadd_db_response == ENTRY_ID_MINIMUM) {
+                respond_str_to_client(client_fd, ID_BELOW_MINIMUM_ERROR);
+            } else if (xadd_db_response == ENTRY_ID_SMALLER) {
+                respond_str_to_client(client_fd, ID_SMALLER_EQUAL_ERROR);
+            }
+            return 1;
+        }
     }
     char* response = to_resp_bulk_str(stream_id);
     respond_str_to_client(client_fd, response);

@@ -36,6 +36,7 @@ int handle_get(int client_fd, str_array*);
 int handle_keys(int client_fd, str_array*);
 int handle_info(int client_fd, str_array*);
 int handle_type(int client_fd, str_array*);
+int handle_xadd(int client_fd, str_array*);
 
 int handle_replconf(int client_fd, str_array*);
 int handle_psync(int client_fd, str_array*);

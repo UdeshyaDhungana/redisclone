@@ -66,6 +66,13 @@ typedef enum StoreType {
     STORETYPE_REDIS_INFO = 4,
 } StoreType;
 
+typedef enum XADD_ERR {
+    NONE = 0,
+    SYSTEM_ERROR = 1,
+    ENTRY_ID_MINIMUM = 2,
+    ENTRY_ID_SMALLER = 3,
+} XADD_ERR;
+
 
 typedef struct Node {
     char* key;
@@ -133,9 +140,10 @@ void delete_node(Node*);
 
 // stream data structures
 StreamNode* make_stream_node(char* ID, char* key, char* value);
-bool append_to_stream(StreamNode*, char*, char*, char*);
+XADD_ERR verify_entry_id(char* existing, char* incoming);
+XADD_ERR append_to_stream(StreamNode*, char*, char*, char*);
 void free_node_ll(StreamNode *n);
-char* xadd_db(char* stream_name, char* ID, char* key, char* value);
+XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value);
 
 StreamHead* retrieve_stream(char* stream_name);
 
