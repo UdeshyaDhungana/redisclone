@@ -484,6 +484,7 @@ int handle_type(int client_fd, str_array* arguments) {
         return 0;
     }
     respond_str_to_client(client_fd, NONE_RESP_SIMPLE_STRING);
+    return 0;
 }
 
 int handle_xadd(int client_fd, str_array* arguments) {
@@ -493,10 +494,13 @@ int handle_xadd(int client_fd, str_array* arguments) {
     char* stream_id = arguments->array[1];
     char* key;
     char* value;
+    // for multiple values created for same stream, skip timestamp check
+    bool ignore_timestamp_check = false;
     for (int i = 2; i < *(arguments->size); i += 2) {
         key = arguments->array[i];
         value = arguments->array[i+1];
-        xadd_db_response = xadd_db(stream_name, stream_id, key, value);
+        xadd_db_response = xadd_db(stream_name, stream_id, key, value, ignore_timestamp_check);
+        ignore_timestamp_check = true;
         if (xadd_db_response != NONE) {
             if (xadd_db_response == SYSTEM_ERROR) {
                 __debug_printf(__LINE__, __FILE__, "Should not have arrived here\n");
@@ -510,6 +514,7 @@ int handle_xadd(int client_fd, str_array* arguments) {
             return 1;
         }
     }
+    __debug_print_stream_DB();
     char* response = to_resp_bulk_str(stream_id);
     respond_str_to_client(client_fd, response);
     free(response);

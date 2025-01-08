@@ -25,7 +25,7 @@ long int get_epoch_ms();
 
 long long choose_between_expiries(unsigned long long, unsigned int);
 
-int get_timestamp_from_entry_id(char* entry_id);
+long int get_timestamp_from_entry_id(char* entry_id);
 int get_sequence_number_from_entry_id(char* entry_id);
 
 unsigned int copy_from_file_contents(char* dst, char* src, unsigned int offset, unsigned int num, bool null_terminate);

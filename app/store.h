@@ -139,11 +139,11 @@ Node* make_node(char* , char*, long int);
 void delete_node(Node*);
 
 // stream data structures
-StreamNode* make_stream_node(char* ID, char* key, char* value);
+StreamNode* make_stream_node(char* ID, char* key, char* value, char* seq_number);
 XADD_ERR verify_entry_id(char* existing, char* incoming);
-XADD_ERR append_to_stream(StreamNode*, char*, char*, char*);
+XADD_ERR append_to_stream(StreamNode*, char*, char*, char*, bool);
 void free_node_ll(StreamNode *n);
-XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value);
+XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value, bool);
 
 StreamHead* retrieve_stream(char* stream_name);
 

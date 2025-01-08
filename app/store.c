@@ -72,7 +72,7 @@ void __debug_print_stream_DB() {
     }
     while (head_runner != NULL) {
         printf("=====================\n");
-        printf("Stream: [%s]\t", head_runner->stream_name);
+        printf("Stream: [%s]\n", head_runner->stream_name);
         __debug_print_stream_node(head_runner->node_ll);
         head_runner = head_runner->next;
     }
@@ -350,46 +350,87 @@ void delete_node(Node* n) {
     free_node(to_delete);
 }
 
-StreamNode* make_stream_node(char* ID, char* key, char* value) {
+StreamNode* make_stream_node(char* ID, char* key, char* value, char* prev_id) {
+    char* generated_id = (char*)malloc(16 * sizeof(char));
+    if (!generated_id) {
+        __debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
+        return NULL;
+    }
+    if (!strcmp(ID, "*")) {
+        sprintf(generated_id, "%ld-%d", get_epoch_ms(), 0);
+    } else {
+        char* dash = strstr(ID, "*");
+        if (!dash) {
+            generated_id = strdup(ID);
+        } else {
+            if (!strcmp(dash+1, "*")) {
+                long int previous_ts = get_timestamp_from_entry_id(prev_id);
+                long int incoming_ts = get_timestamp_from_entry_id(ID);
+                if (previous_ts == incoming_ts) {
+                    int previous_sequence_number = get_sequence_number_from_entry_id(prev_id);
+                    sprintf(generated_id, "%ld-%d\n", incoming_ts, previous_sequence_number + 1);
+                } else {
+                    *(dash + 1) = '0';
+                    generated_id = strdup(ID);
+                }
+            // compare timestamp with previous id, if same, increment the sequence number and put to generate_id
+            // if not, same timestamp, use the given timestamp and replace * by 0
+            }
+        }
+    }
     StreamNode* result = malloc(sizeof(StreamNode));
     if (!result) {
         __debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
         return NULL;
     }
+    /* If ID is of format *, fully generate */
     result->next = NULL;
-    result->ID = strdup(ID);
+    result->ID = strdup(generated_id);
     result->key = strdup(key);
     result->value = strdup(value);
+    ID = strdup(generated_id);
     return result;
 }
 
 XADD_ERR verify_entry_id(char* existing, char* incoming) {
-    int existing_ts, incoming_ts, existing_seq, incoming_seq;
+    bool is_full_id = true;
+    if (!strcmp(incoming, "*")) {
+        return NONE;
+    } else {
+        char* dash = strstr(incoming, "-");
+        if (!strcmp(dash + 1, "*")) {
+            is_full_id = false;
+        }
+    }
+    long int existing_ts, incoming_ts;
+    int existing_seq, incoming_seq;
     existing_ts = get_timestamp_from_entry_id(existing);
     incoming_ts = get_timestamp_from_entry_id(incoming);
-    existing_seq = get_sequence_number_from_entry_id(existing);
-    incoming_seq = get_sequence_number_from_entry_id(incoming);
-
-    // verify minimum
-    if (incoming_ts == 0) {
-        if (incoming_seq < 1) {
-            return ENTRY_ID_MINIMUM;
+    if (is_full_id) {
+        existing_seq = get_sequence_number_from_entry_id(existing);
+        incoming_seq = get_sequence_number_from_entry_id(incoming);
+        // verify minimum
+        if (incoming_ts == 0) {
+            if (incoming_seq < 1) {
+                return ENTRY_ID_MINIMUM;
+            }
         }
-    }
-
-    if (incoming_ts < existing_ts) return ENTRY_ID_SMALLER;
-
-    if (incoming_ts == existing_ts) {
-        if (incoming_seq > existing_seq) {
-            return NONE;
+        if (incoming_ts < existing_ts) return ENTRY_ID_SMALLER;
+        if (incoming_ts == existing_ts) {
+            if (incoming_seq > existing_seq) {
+                return NONE;
+            }
+            return ENTRY_ID_SMALLER;
         }
-        return ENTRY_ID_SMALLER;
-    }
-
-    return NONE;
+        return NONE;
+    } else {
+        if (incoming_ts < existing_ts) return ENTRY_ID_SMALLER;
+        return NONE;
+    }     
 }
 
-XADD_ERR append_to_stream(StreamNode* target, char* ID, char* key, char* value) {
+XADD_ERR append_to_stream(StreamNode* target, char* ID, char* key, char* value, bool ignore_ts_check) {
+    XADD_ERR verify_result = NONE;
     if (!target) {
         return SYSTEM_ERROR;
     }
@@ -397,19 +438,16 @@ XADD_ERR append_to_stream(StreamNode* target, char* ID, char* key, char* value) 
     while (runner->next != NULL) {
         runner = runner->next;
     }
-    XADD_ERR verify_result = verify_entry_id(runner->ID, ID);
+    if (!ignore_ts_check) {
+        verify_result = verify_entry_id(runner->ID, ID);
+    }
     if (verify_result != NONE) {
         return verify_result;
     }
-    StreamNode* new_node = malloc(sizeof(StreamNode));
+    StreamNode* new_node = make_stream_node(ID, key, value, runner->ID);
     if (!new_node) {
-        __debug_printf(__LINE__, __FILE__, "malloc failed: %s\n", strerror(errno));
         return SYSTEM_ERROR;
     }
-    new_node->next = NULL;
-    new_node->ID = strdup(ID);
-    new_node->key = strdup(key);
-    new_node->value = strdup(value);
     runner->next = new_node;
     return NONE;
 }
@@ -422,9 +460,9 @@ void free_node_ll(StreamNode* n) {
     free(n);
 }
 
-XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value) {
+XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value, bool ignore_timestamp_check) {
     if (GS.streamDB == NULL) {
-        StreamNode *s = make_stream_node(ID, key, value);
+        StreamNode *s = make_stream_node(ID, key, value, NULL);
         if (!s) {
             __debug_printf(__LINE__, __FILE__, "make_stream_node failed\n");
             free(s);
@@ -433,7 +471,7 @@ XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value) {
         GS.streamDB = malloc(sizeof(StreamHead));
         GS.streamDB->next = NULL;
         GS.streamDB->stream_name = strdup(stream_name);
-        GS.streamDB->node_ll = make_stream_node(ID, key, value);
+        GS.streamDB->node_ll = s;
         return NONE;
     } else {
         StreamHead* runner = GS.streamDB;
@@ -442,11 +480,10 @@ XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value) {
             runner = runner->next;
         }
         if (!strcmp(stream_name, runner->stream_name)) {
-            // insert to this streamhead
-            return append_to_stream(runner->node_ll, ID, key, value);
+            return append_to_stream(runner->node_ll, ID, key, value, ignore_timestamp_check);
         } else {
             // create a new stream head
-            new_node_ll = make_stream_node(ID, key, value);
+            new_node_ll = make_stream_node(ID, key, value, NULL);
             if (!new_node_ll) {
                 __debug_printf(__LINE__, __FILE__, "make_stream_node failed\n");
                 return SYSTEM_ERROR;
