@@ -148,8 +148,15 @@ enum State_modification process_command(int client_fd, str_array* command_and_ar
         } else {
             cmd_error_flag = true;
         }
-    }
-     else {
+    } else if (!strcmp(command, "XRANGE")) {
+        if (*(command_and_args->size) == 4) {
+            rest->array = ((command_and_args->array) + 1);
+            *(rest->size) = *(command_and_args->size) - 1;
+            handle_xrange(client_fd, rest);
+        } else {
+            cmd_error_flag = true;
+        }
+    } else {
         cmd_error_flag = true;
     }
     if (cmd_error_flag) {
@@ -518,6 +525,22 @@ int handle_xadd(int client_fd, str_array* arguments) {
     char* response = to_resp_bulk_str(stream_id);
     respond_str_to_client(client_fd, response);
     free(response);
+    return 0;
+}
+
+int handle_xrange(int client_fd, str_array* arguments) {
+    char* key = arguments->array[0];
+    char* start_ID = arguments->array[1];
+    char* end_ID = arguments->array[1];
+    int length;
+
+    StreamNode* start_node = xrange(key, start_ID, end_ID, &length);
+    if (start_node == NULL) {
+        respond_str_to_client(client_fd, NULL_BULK_STR);
+        return 0;
+    }
+    char* response = stream_node_to_resp_array(start_node, length);
+    respond_str_to_client(client_fd, response);
     return 0;
 }
 

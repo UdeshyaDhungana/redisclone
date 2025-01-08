@@ -514,6 +514,67 @@ StreamHead* retrieve_stream(char* stream_name) {
     return NULL;
 }
 
+// > be me 
+// > pack data for conciseness
+// > facing the cost of packing data 
+// > mfw
+StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length) {
+    StreamHead* head = retrieve_stream(stream_name);
+    if (!head) return NULL;
+    long int start_node_ts, end_node_ts, start_id_ts, end_id_ts;
+    int start_id_seq, end_id_seq, start_node_seq, end_node_seq;
+    start_id_ts = get_timestamp_from_entry_id(start_ID);
+    end_id_ts = get_timestamp_from_entry_id(end_ID);
+    start_id_seq = get_sequence_number_from_entry_id(start_ID);
+    end_id_seq = get_sequence_number_from_entry_id(end_ID);
+    // find first node
+    StreamNode* start_node = head->node_ll;
+    while (start_node != NULL) {
+        start_node_ts = get_timestamp_from_entry_id(start_node->ID);
+        start_node_seq = get_sequence_number_from_entry_id(start_node->ID);
+        if (start_node_ts > start_id_ts) break;
+        if (start_node_ts < start_id_ts) {
+            start_node = start_node->next;
+        } else {
+            if (start_id_seq == -1) break;
+            if (start_id_seq < start_node_seq) {
+                start_node = start_node->next
+            } else {
+                break;
+            }
+        }
+    }
+    if (start_node == NULL) {
+        return NULL;
+    }
+    StreamNode* end_node = start_node;
+    StreamNode* end_node_next = start_node->next;
+    int counter = 1;
+    while (end_node_next != NULL) {
+        counter++;
+        end_node_ts = get_timestamp_from_entry_id(end_node_next->ID);
+        end_node_seq = get_sequence_number_from_entry_id(end_node->ID);
+        if (end_node_ts > end_id_ts) break;
+        if (end_node_ts < end_id_ts) {
+            end_node = end_node_next;
+            end_node_next = end_node_next->next;
+        } else {
+            if (end_id_seq == -1) {
+                end_node = end_node_next;
+                end_node_next = end_node_next->next;
+            } else if (end_id_seq > end_node_seq) {
+                break;
+            } else if (end_id_seq <= end_node_seq) {
+                end_node = end_node_next;
+                end_node_next = end_node_next->next;
+            }
+        }
+    }
+
+    *length = counter;
+    return start_node;
+}
+
 bool save_to_store(StoreType st, char* key, char* value, long int expiry_ms) {
     bool result;
     Node** store_ptr;

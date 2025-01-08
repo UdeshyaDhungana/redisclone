@@ -23,11 +23,15 @@ int split_string(char* source, char delim, char** left, char** right) {
 	return 0;
 }
 
-// this program will be 
+// returns ts from ID, works with xrange query as well
 long int get_timestamp_from_entry_id(char* entry_id) {
 	long int result;
 	char* entry_id_dup = strdup(entry_id);
 	char* dash = strstr(entry_id_dup, "-");
+	if (!dash) {
+		free(entry_id_dup);
+		return atol(entry_id_dup);
+	}
 	*dash = 0;
 	result = atol(entry_id_dup);
 	free(entry_id_dup);
@@ -36,6 +40,9 @@ long int get_timestamp_from_entry_id(char* entry_id) {
 
 int get_sequence_number_from_entry_id(char* entry_id) {
 	char* dash = strstr(entry_id, "-");
+	if (dash == NULL) {
+		return -1;
+	}
 	return atoi(dash + 1);
 }
 

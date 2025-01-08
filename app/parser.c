@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <assert.h>
 #include "util.h"
+#include "store.h"
 
 
 
@@ -190,4 +191,9 @@ char* to_resp_array(str_array* array) {
 		strcat(response, "\r\n");
 	}
 	return response;
+}
+
+// if circular include is reached, you may move this function to store.c
+char* stream_node_to_resp_array(StreamNode* node, int length) {
+	
 }

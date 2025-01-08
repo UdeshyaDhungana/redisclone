@@ -26,4 +26,7 @@ char* to_resp_bulk_str(char* str);
 char* to_resp_integer(int);
 
 char* to_resp_array(str_array* array);
+
+char* stream_node_to_resp_array(StreamNode* node, int length);
+
 #endif

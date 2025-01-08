@@ -144,6 +144,8 @@ XADD_ERR verify_entry_id(char* existing, char* incoming);
 XADD_ERR append_to_stream(StreamNode*, char*, char*, char*, bool);
 void free_node_ll(StreamNode *n);
 XADD_ERR xadd_db(char* stream_name, char* ID, char* key, char* value, bool);
+StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length);
+int compare_entry_ID(char* first, char* second);
 
 StreamHead* retrieve_stream(char* stream_name);
 
