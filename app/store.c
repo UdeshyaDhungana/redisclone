@@ -359,22 +359,23 @@ StreamNode* make_stream_node(char* ID, char* key, char* value, char* prev_id) {
     if (!strcmp(ID, "*")) {
         sprintf(generated_id, "%ld-%d", get_epoch_ms(), 0);
     } else {
-        char* dash = strstr(ID, "*");
-        if (!dash) {
-            generated_id = strdup(ID);
+        char* dash = strstr(ID, "-");
+        if (!dash) return NULL;
+        if (strcmp(dash + 1, "*") != 0) {
+            strcpy(generated_id, ID);
         } else {
-            if (!strcmp(dash+1, "*")) {
+            // first one in the stream
+            long int incoming_ts = get_timestamp_from_entry_id(ID);
+            if (prev_id == NULL) {
+                sprintf(generated_id, "%ld-%d", incoming_ts, (incoming_ts == 0) ? 1:0);
+            } else {
+                int previous_seq = get_sequence_number_from_entry_id(prev_id);
                 long int previous_ts = get_timestamp_from_entry_id(prev_id);
-                long int incoming_ts = get_timestamp_from_entry_id(ID);
-                if (previous_ts == incoming_ts) {
-                    int previous_sequence_number = get_sequence_number_from_entry_id(prev_id);
-                    sprintf(generated_id, "%ld-%d\n", incoming_ts, previous_sequence_number + 1);
+                if (incoming_ts == previous_ts) {
+                    sprintf(generated_id, "%ld-%d", incoming_ts, (previous_seq + 1));
                 } else {
-                    *(dash + 1) = '0';
-                    generated_id = strdup(ID);
+                    sprintf(generated_id, "%ld-%d", incoming_ts, 0, (incoming_ts == 0) ? 1:0);
                 }
-            // compare timestamp with previous id, if same, increment the sequence number and put to generate_id
-            // if not, same timestamp, use the given timestamp and replace * by 0
             }
         }
     }
@@ -388,7 +389,7 @@ StreamNode* make_stream_node(char* ID, char* key, char* value, char* prev_id) {
     result->ID = strdup(generated_id);
     result->key = strdup(key);
     result->value = strdup(value);
-    ID = strdup(generated_id);
+    strcpy(ID, generated_id);
     return result;
 }
 
