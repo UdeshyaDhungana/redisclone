@@ -29,8 +29,9 @@ long int get_timestamp_from_entry_id(char* entry_id) {
 	char* entry_id_dup = strdup(entry_id);
 	char* dash = strstr(entry_id_dup, "-");
 	if (!dash) {
+		result = atol(entry_id_dup);
 		free(entry_id_dup);
-		return atol(entry_id_dup);
+		return result;
 	}
 	*dash = 0;
 	result = atol(entry_id_dup);

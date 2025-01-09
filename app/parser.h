@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "util.h"
+#include "store.h"
 
 // will work for most of the test cases
 #define BUFFER_LEN 4096
@@ -26,6 +27,8 @@ char* to_resp_bulk_str(char* str);
 char* to_resp_integer(int);
 
 char* to_resp_array(str_array* array);
+
+char* stream_node_with_same_id_to_resp_array(StreamNode* start_node);
 
 char* stream_node_to_resp_array(StreamNode* node, int length);
 

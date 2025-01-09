@@ -52,15 +52,20 @@ void __debug_print_metadata() {
     __debug_print_Node(GS.metadata);
 }
 
-void __debug_print_stream_node(StreamNode* node) {
+void __debug_print_stream_node(StreamNode* node, int count) {
     StreamNode* runner = node;
-    while (runner != NULL) {
+    int i = 0;
+    printf("========================\n");
+    while (runner != NULL && i < count) {
+        printf("%d is i\n", i);
         printf("ID: %s\n", runner->ID);
         printf("Key: %s\n", runner->key);
         printf("Value: %s\n", runner->value);
         printf("--------------\n");
         runner = runner->next;
+        i++;
     }
+    printf("========================\n");
 }
 
 void __debug_print_stream_DB() {
@@ -71,9 +76,8 @@ void __debug_print_stream_DB() {
         return;
     }
     while (head_runner != NULL) {
-        printf("=====================\n");
         printf("Stream: [%s]\n", head_runner->stream_name);
-        __debug_print_stream_node(head_runner->node_ll);
+        __debug_print_stream_node(head_runner->node_ll, INT_MAX);
         head_runner = head_runner->next;
     }
 }
@@ -374,7 +378,7 @@ StreamNode* make_stream_node(char* ID, char* key, char* value, char* prev_id) {
                 if (incoming_ts == previous_ts) {
                     sprintf(generated_id, "%ld-%d", incoming_ts, (previous_seq + 1));
                 } else {
-                    sprintf(generated_id, "%ld-%d", incoming_ts, 0, (incoming_ts == 0) ? 1:0);
+                    sprintf(generated_id, "%ld-%d", incoming_ts, (incoming_ts == 0) ? 1:0);
                 }
             }
         }
@@ -523,6 +527,7 @@ StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length)
     if (!head) return NULL;
     long int start_node_ts, end_node_ts, start_id_ts, end_id_ts;
     int start_id_seq, end_id_seq, start_node_seq, end_node_seq;
+
     start_id_ts = get_timestamp_from_entry_id(start_ID);
     end_id_ts = get_timestamp_from_entry_id(end_ID);
     start_id_seq = get_sequence_number_from_entry_id(start_ID);
@@ -538,7 +543,7 @@ StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length)
         } else {
             if (start_id_seq == -1) break;
             if (start_id_seq < start_node_seq) {
-                start_node = start_node->next
+                start_node = start_node->next;
             } else {
                 break;
             }
@@ -548,7 +553,7 @@ StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length)
         return NULL;
     }
     StreamNode* end_node = start_node;
-    StreamNode* end_node_next = start_node->next;
+    StreamNode* end_node_next = end_node->next;
     int counter = 1;
     while (end_node_next != NULL) {
         counter++;
@@ -562,14 +567,16 @@ StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length)
             if (end_id_seq == -1) {
                 end_node = end_node_next;
                 end_node_next = end_node_next->next;
-            } else if (end_id_seq > end_node_seq) {
-                break;
-            } else if (end_id_seq <= end_node_seq) {
+            }
+            else if (end_id_seq > end_node_seq) break;
+            else if (end_id_seq <= end_node_seq) {
                 end_node = end_node_next;
                 end_node_next = end_node_next->next;
             }
         }
     }
+
+    __debug_print_stream_node(start_node, counter);
 
     *length = counter;
     return start_node;

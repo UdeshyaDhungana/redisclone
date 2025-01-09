@@ -521,7 +521,6 @@ int handle_xadd(int client_fd, str_array* arguments) {
             return 1;
         }
     }
-    __debug_print_stream_DB();
     char* response = to_resp_bulk_str(stream_id);
     respond_str_to_client(client_fd, response);
     free(response);

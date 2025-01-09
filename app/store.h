@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <pthread.h>
+#include <limits.h>
 #include "util.h"
 
 #define C_DIR  "dir"
@@ -116,7 +117,7 @@ void __debug_print_DB();
 void __debug_print_config();
 void __debug_print_metadata();
 void __debug_print_store(Node* );
-void __debug_print_stream_node(StreamNode*);
+void __debug_print_stream_node(StreamNode*, int);
 void __debug_print_stream_DB();
 
 // load database from file

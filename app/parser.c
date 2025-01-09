@@ -193,7 +193,55 @@ char* to_resp_array(str_array* array) {
 	return response;
 }
 
-// if circular include is reached, you may move this function to store.c
-char* stream_node_to_resp_array(StreamNode* node, int length) {
+
+char* stream_node_with_same_id_to_resp_array(StreamNode* start_node) {
+	char* response = (char*)malloc(2048);
+	memset(response, 0, 2048);
+	// there are always 2 elements in an array, first ID, second, an array with key value pairs
+	strcat(response, "*2\r\n");
 	
+	// insert ID
+	char* ID_resp_bulk_str = to_resp_bulk_str(start_node->ID);
+	strcat(response, ID_resp_bulk_str);
+	free(ID_resp_bulk_str);
+
+
+	StreamNode* runnerNode = start_node;
+	int num_pairs = 0;
+	while ((runnerNode != NULL) && !strcmp(runnerNode->ID, start_node->ID)) {
+		num_pairs++;
+		runnerNode = runnerNode->next;
+	}
+
+	strcat(response, "*%d\r\n", (2 * num_pairs));
+
+	char* temp;
+	runnerNode = start_node;
+	while ((runnerNode != NULL) && !strcmp(runnerNode->ID, start_node->ID)) {
+		temp = to_resp_bulk_str(runnerNode->key);
+		strcat(response, temp);
+		free(temp);
+		temp = to_resp_bulk_str(runnerNode->value);
+		strcat(response, temp);
+		free(temp);
+	}
+	return response;
+}
+
+// if circular include is reached, you may move this function to store.c
+char* stream_node_to_resp_array(StreamNode* start_node, int length) {
+	char* response = (char*)malloc(4096);
+	memset(response, 0, sizeof(4096));
+	int outer_length;
+	int entries_id_id = 2;
+	int num_of_key_val_pairs;
+
+	StreamNode* runner_node = start_node;
+	StreamNode* catcher_runner = runner_node;
+	char* temp;
+	while (true) {
+		// determine unique ids
+		// for each uniq id, strcat the stream_node_with_same_id_to_resp_array function
+	}
+	// return
 }
