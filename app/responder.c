@@ -530,7 +530,7 @@ int handle_xadd(int client_fd, str_array* arguments) {
 int handle_xrange(int client_fd, str_array* arguments) {
     char* key = arguments->array[0];
     char* start_ID = arguments->array[1];
-    char* end_ID = arguments->array[1];
+    char* end_ID = arguments->array[2];
     int length;
 
     StreamNode* start_node = xrange(key, start_ID, end_ID, &length);

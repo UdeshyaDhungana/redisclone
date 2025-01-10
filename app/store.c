@@ -57,7 +57,6 @@ void __debug_print_stream_node(StreamNode* node, int count) {
     int i = 0;
     printf("========================\n");
     while (runner != NULL && i < count) {
-        printf("%d is i\n", i);
         printf("ID: %s\n", runner->ID);
         printf("Key: %s\n", runner->key);
         printf("Value: %s\n", runner->value);
@@ -522,61 +521,95 @@ StreamHead* retrieve_stream(char* stream_name) {
 // > pack data for conciseness
 // > facing the cost of packing data 
 // > mfw
+// if you're wondering why i'm doing this so horribly, here's an explanation
+// i have not used redis before building this clone
+// i did not know how streams are stored
+// i followed codecrafter's instructions and they were not clear on how i should store it
+// it's fair, we're free to choose our own implementation
+// so i implemented stream db as linked list (i know already a horrible choice for data storage in terms of time complexity)
+// aside from that, i stored the values with same ts in different 'buckets' or nodes
+// they should have at least asked to look the output of xrange before asking us to implement to xadd so have a better idea on
+// what data are closely related
+// facing consequences
+// fuck it we ball neverthelesss ---- ⚡ Ride the lightning 
+StreamNode* get_smallest_node_greater_than_or_equal_to(StreamNode* start, char* start_ID) {
+    long int node_ts = get_timestamp_from_entry_id(start->ID);
+    int node_seq;
+    long int target_ts = get_timestamp_from_entry_id(start_ID);
+    int target_seq = get_sequence_number_from_entry_id(start_ID);
+    while (start != NULL &&  node_ts < target_ts) {
+        node_ts = get_timestamp_from_entry_id(start->ID);
+        node_seq = get_sequence_number_from_entry_id(start->ID);
+        start = start->next;
+    }
+    if (start == NULL) {
+        return NULL;
+    }
+    if (node_ts > target_ts) {
+        return start;
+    } else {
+        if (target_seq == -1) {
+            return start;
+        }
+        while (start != NULL && node_seq < target_seq) {
+            start = start->next;
+            node_ts = get_timestamp_from_entry_id(start->ID);
+            node_seq = get_sequence_number_from_entry_id(start->ID);
+        }
+        return start;
+    }
+}
+
+StreamNode* get_greatest_node_smaller_than_or_equal_to(StreamNode* start_node, char* end_ID) {
+    long int node_ts = get_timestamp_from_entry_id(start_node->ID);
+    int node_seq;
+    long int target_ts = get_timestamp_from_entry_id(end_ID);
+    long int target_seq = get_sequence_number_from_entry_id(end_ID);
+    StreamNode* result = NULL;
+    while (start_node != NULL && node_ts < target_ts) {
+        node_ts = get_timestamp_from_entry_id(start_node->ID);
+        node_seq = get_timestamp_from_entry_id(start_node->ID);
+        result = start_node;
+        start_node = start_node->next;
+    }
+    if (start_node == NULL || node_ts > target_ts) {
+        return result;
+    }
+    if (target_seq == -1) {
+        long int original_ts = get_timestamp_from_entry_id(start_node->ID);
+        while (start_node != NULL && node_ts == original_ts) {
+            node_ts = get_timestamp_from_entry_id(start_node->ID);
+            node_seq = get_sequence_number_from_entry_id(start_node->ID);
+            result = start_node;
+            start_node = start_node->next;
+        }
+        return result;
+    } else {
+        long int original_ts = get_timestamp_from_entry_id(start_node->ID);
+        while (start_node != NULL && node_ts == original_ts && node_seq < target_seq ) {
+            node_ts = get_timestamp_from_entry_id(start_node->ID);
+            node_seq = get_sequence_number_from_entry_id(start_node->ID);
+            result = start_node;
+            start_node = start_node->next;
+        }
+    }
+}
+
+
 StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length) {
     StreamHead* head = retrieve_stream(stream_name);
     if (!head) return NULL;
-    long int start_node_ts, end_node_ts, start_id_ts, end_id_ts;
-    int start_id_seq, end_id_seq, start_node_seq, end_node_seq;
 
-    start_id_ts = get_timestamp_from_entry_id(start_ID);
-    end_id_ts = get_timestamp_from_entry_id(end_ID);
-    start_id_seq = get_sequence_number_from_entry_id(start_ID);
-    end_id_seq = get_sequence_number_from_entry_id(end_ID);
-    // find first node
-    StreamNode* start_node = head->node_ll;
-    while (start_node != NULL) {
-        start_node_ts = get_timestamp_from_entry_id(start_node->ID);
-        start_node_seq = get_sequence_number_from_entry_id(start_node->ID);
-        if (start_node_ts > start_id_ts) break;
-        if (start_node_ts < start_id_ts) {
-            start_node = start_node->next;
-        } else {
-            if (start_id_seq == -1) break;
-            if (start_id_seq < start_node_seq) {
-                start_node = start_node->next;
-            } else {
-                break;
-            }
-        }
-    }
-    if (start_node == NULL) {
-        return NULL;
-    }
-    StreamNode* end_node = start_node;
-    StreamNode* end_node_next = end_node->next;
+    // find smallest node that is equal to or greater than start_ID
+    StreamNode* start_node = get_smallest_node_greater_than_or_equal_to(head->node_ll, start_ID);
+    if (start_node == NULL) return NULL;
+    StreamNode* end_node = get_greatest_node_smaller_than_or_equal_to(start_node, end_ID);
+    
     int counter = 1;
-    while (end_node_next != NULL) {
+    while (start_node != end_node) {
+        start_node = start_node->next;
         counter++;
-        end_node_ts = get_timestamp_from_entry_id(end_node_next->ID);
-        end_node_seq = get_sequence_number_from_entry_id(end_node->ID);
-        if (end_node_ts > end_id_ts) break;
-        if (end_node_ts < end_id_ts) {
-            end_node = end_node_next;
-            end_node_next = end_node_next->next;
-        } else {
-            if (end_id_seq == -1) {
-                end_node = end_node_next;
-                end_node_next = end_node_next->next;
-            }
-            else if (end_id_seq > end_node_seq) break;
-            else if (end_id_seq <= end_node_seq) {
-                end_node = end_node_next;
-                end_node_next = end_node_next->next;
-            }
-        }
     }
-
-    __debug_print_stream_node(start_node, counter);
 
     *length = counter;
     return start_node;
