@@ -592,6 +592,7 @@ StreamNode* get_greatest_node_smaller_than_or_equal_to(StreamNode* start_node, c
             result = start_node;
             start_node = start_node->next;
         }
+        return result;
     }
 }
 
