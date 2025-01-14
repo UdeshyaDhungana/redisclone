@@ -219,32 +219,50 @@ char* stream_node_with_same_id_to_resp_array(StreamNode* start_node) {
 
 	char* temp;
 	runnerNode = start_node;
-	while ((runnerNode != NULL) && !strcmp(runnerNode->ID, start_node->ID)) {
+	// invariant: num_pairs is always even, see the line containing sprintf
+	for (int i = 0; i < num_pairs; i++) {
 		temp = to_resp_bulk_str(runnerNode->key);
 		strcat(response, temp);
 		free(temp);
 		temp = to_resp_bulk_str(runnerNode->value);
 		strcat(response, temp);
 		free(temp);
+		runnerNode = runnerNode->next;
 	}
 	return response;
 }
 
 // if circular include is reached, you may move this function to store.c
 char* stream_node_to_resp_array(StreamNode* start_node, int length) {
-	return NULL;
-	// char* response = (char*)malloc(4096);
-	// memset(response, 0, sizeof(4096));
-	// int outer_length;
-	// int entries_id_id = 2;
-	// int num_of_key_val_pairs;
+	if (start_node == NULL) return NULL;
+	char value_to_compare[16];
+	strcpy(value_to_compare, "unmatchable");
+	int num_uniq_ids = 0;
+	char num_uniq_ids_placeholder[16];
+	StreamNode* runner = start_node;
+	for (int i = 0; i < length; i++) {
+		if (strcmp(runner->ID, value_to_compare)) {
+			num_uniq_ids += 1;
+			strcpy(value_to_compare, runner->ID);
+		}
+		runner = runner->next;
+	}
+	sprintf(num_uniq_ids_placeholder, "*%d\r\n", num_uniq_ids);
+	char* response = malloc(4096);
+	memset(response, 0, 4096);
+	strcpy(response, num_uniq_ids_placeholder);
 
-	// StreamNode* runner_node = start_node;
-	// StreamNode* catcher_runner = runner_node;
-	// char* temp;
-	// while (true) {
-	// 	// determine unique ids
-	// 	// for each uniq id, strcat the stream_node_with_same_id_to_resp_array function
-	// }
-	// // return
+	strcpy(value_to_compare, "unmatchable");
+	char* individual_response;
+	runner = start_node;
+	for (int i = 0; i < length; i++) {
+		if (strcmp(runner->ID, value_to_compare)) {
+			individual_response = stream_node_with_same_id_to_resp_array(runner);
+			strcat(response, individual_response);
+			free(individual_response);
+			strcpy(value_to_compare, runner->ID);
+		}
+		runner = runner->next;
+	}
+	return response;
 }

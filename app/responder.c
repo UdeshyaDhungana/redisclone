@@ -57,6 +57,7 @@ enum State_modification process_command(int client_fd, str_array* command_and_ar
         client_fd = -1;
     }
 
+    str_to_upper(command);
     if (!strcmp(command, "PING")) {
         handle_ping(client_fd);
     } else if (!strcmp(command, "ECHO")) {

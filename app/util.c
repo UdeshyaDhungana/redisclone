@@ -406,3 +406,7 @@ void set_non_blocking(int sockfd) {
 	int flags = fcntl(sockfd, F_GETFL, 0);
 	fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 }
+
+void str_to_upper(char* str) {
+	for (; *str; str++) *str = toupper((unsigned char) (*str));
+}

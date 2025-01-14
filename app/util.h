@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <sys/syscall.h>
 
 #define POLY 0xC96C5795D7870F42ULL // ECMA polynomial
@@ -72,5 +73,7 @@ void free_file_content(file_content*);
 void hex_to_bytes(const char *hex_str, unsigned char **out_bytes, size_t *out_len);
 
 void set_non_blocking(int);
+
+void str_to_upper(char* str);
 
 #endif

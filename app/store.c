@@ -533,14 +533,15 @@ StreamHead* retrieve_stream(char* stream_name) {
 // facing consequences
 // fuck it we ball neverthelesss ---- ⚡ Ride the lightning 
 StreamNode* get_smallest_node_greater_than_or_equal_to(StreamNode* start, char* start_ID) {
-    long int node_ts = get_timestamp_from_entry_id(start->ID);
-    int node_seq;
+    if (!strcmp(start_ID, "-")) return start;
     long int target_ts = get_timestamp_from_entry_id(start_ID);
     int target_seq = get_sequence_number_from_entry_id(start_ID);
+    long int node_ts = get_timestamp_from_entry_id(start->ID);
+    int node_seq = get_sequence_number_from_entry_id(start->ID);
     while (start != NULL &&  node_ts < target_ts) {
+        start = start->next;
         node_ts = get_timestamp_from_entry_id(start->ID);
         node_seq = get_sequence_number_from_entry_id(start->ID);
-        start = start->next;
     }
     if (start == NULL) {
         return NULL;
@@ -561,16 +562,26 @@ StreamNode* get_smallest_node_greater_than_or_equal_to(StreamNode* start, char* 
 }
 
 StreamNode* get_greatest_node_smaller_than_or_equal_to(StreamNode* start_node, char* end_ID) {
+    if (!strcmp(end_ID, "+")) {
+        StreamNode* runner = NULL;
+        while (start_node != NULL) {
+            runner = start_node;
+            start_node = start_node->next;
+        }
+        return runner;
+    }
     long int node_ts = get_timestamp_from_entry_id(start_node->ID);
     int node_seq;
     long int target_ts = get_timestamp_from_entry_id(end_ID);
     long int target_seq = get_sequence_number_from_entry_id(end_ID);
     StreamNode* result = NULL;
+    node_ts = get_timestamp_from_entry_id(start_node->ID);
+    node_seq = get_sequence_number_from_entry_id(start_node->ID);
     while (start_node != NULL && node_ts < target_ts) {
-        node_ts = get_timestamp_from_entry_id(start_node->ID);
-        node_seq = get_timestamp_from_entry_id(start_node->ID);
         result = start_node;
         start_node = start_node->next;
+        node_ts = get_timestamp_from_entry_id(start_node->ID);
+        node_seq = get_sequence_number_from_entry_id(start_node->ID);
     }
     if (start_node == NULL || node_ts > target_ts) {
         return result;
@@ -578,19 +589,20 @@ StreamNode* get_greatest_node_smaller_than_or_equal_to(StreamNode* start_node, c
     if (target_seq == -1) {
         long int original_ts = get_timestamp_from_entry_id(start_node->ID);
         while (start_node != NULL && node_ts == original_ts) {
-            node_ts = get_timestamp_from_entry_id(start_node->ID);
-            node_seq = get_sequence_number_from_entry_id(start_node->ID);
             result = start_node;
             start_node = start_node->next;
+            node_ts = get_timestamp_from_entry_id(start_node->ID);
+            node_seq = get_sequence_number_from_entry_id(start_node->ID);
         }
         return result;
     } else {
         long int original_ts = get_timestamp_from_entry_id(start_node->ID);
-        while (start_node != NULL && node_ts == original_ts && node_seq < target_seq ) {
-            node_ts = get_timestamp_from_entry_id(start_node->ID);
-            node_seq = get_sequence_number_from_entry_id(start_node->ID);
+        while (node_ts == original_ts && node_seq <= target_seq ) {
             result = start_node;
             start_node = start_node->next;
+            if (start_node == NULL) break;
+            node_seq = get_sequence_number_from_entry_id(start_node->ID);
+            node_ts = get_timestamp_from_entry_id(start_node->ID);
         }
         return result;
     }
@@ -605,10 +617,12 @@ StreamNode* xrange(char* stream_name, char* start_ID, char* end_ID, int* length)
     StreamNode* start_node = get_smallest_node_greater_than_or_equal_to(head->node_ll, start_ID);
     if (start_node == NULL) return NULL;
     StreamNode* end_node = get_greatest_node_smaller_than_or_equal_to(start_node, end_ID);
+    // printf("%s %s and %s\n", start_node->ID, start_node->key, start_node->value)
     
     int counter = 1;
-    while (start_node != end_node) {
-        start_node = start_node->next;
+    StreamNode* runner = start_node;
+    while (runner != end_node) {
+        runner = runner->next;
         counter++;
     }
 
